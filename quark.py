@@ -6,6 +6,7 @@ from typing import List, Dict, Union
 
 import httpx
 from prettytable import PrettyTable
+from quark_login import QuarkLogin, CONFIG_DIR
 
 
 class QuarkPanFileManager:
@@ -24,7 +25,6 @@ class QuarkPanFileManager:
 
     @staticmethod
     def get_cookies() -> str:
-        from quark_login import QuarkLogin
         quark_login = QuarkLogin(headless=False, slow_mo=500)
         cookies: str = quark_login.get_cookies()
         return cookies
@@ -191,8 +191,8 @@ class QuarkPanFileManager:
             return task_id
 
     @staticmethod
-    def save_pid(pid, name):
-        with open('config.txt', 'w', encoding='utf-8') as f:
+    def save_pid(pid, name) -> None:
+        with open(f'{CONFIG_DIR}/save_dir.conf', 'w', encoding='utf-8') as f:
             f.write(f"{pid},{name}")
 
     @staticmethod
@@ -229,17 +229,17 @@ class QuarkPanFileManager:
             else:
                 print('任务执行失败！')
 
-    async def load_folder_id(self, renew=False):
+    async def load_folder_id(self, renew=False) -> Union[tuple, None]:
         try:
 
-            with open('config.txt', 'r', encoding='utf-8') as f:
+            with open(f'{CONFIG_DIR}/save_dir.conf', 'r', encoding='utf-8') as f:
                 content = f.read()
                 if content:
                     pdir_config = content.strip().replace('，', ',').split(',')
                 else:
                     pdir_config = None
         except FileNotFoundError:
-            with open('config.txt', 'w', encoding='utf-8'):
+            with open(f'{CONFIG_DIR}/save_dir.conf', 'w', encoding='utf-8'):
                 pdir_config = None
 
         if not renew and pdir_config and len(pdir_config) > 1:
@@ -277,19 +277,26 @@ def load_url_file(fpath: str) -> list:
     return url_list
 
 
+def print_menu() -> None:
+    print("╔═════════════════════════════════════════════════════════════════════════════════╗")
+    print("║                                  Author: Hmily                                  ║")
+    print("║                   GitHub: https://github.com/ihmily/QuarkPanTool                ║")
+    print("╠═════════════════════════════════════════════════════════════════════════════════╣")
+    print("║             1.单个分享地址转存   2.批量分享地址转存   3.切换保存目录   q.退出            ║")
+    print("╚═════════════════════════════════════════════════════════════════════════════════╝")
+
+
 if __name__ == '__main__':
     quark_file_manager = QuarkPanFileManager()
     while True:
-        print("---------------------------------------------------------------")
-        print("|   1.单个分享地址转存   2.批量分享地址转存   3.切换保存目录   q.退出  |")
-        print("---------------------------------------------------------------")
+        print_menu()
 
         to_dir_id, to_dir_name = asyncio.run(quark_file_manager.load_folder_id())
 
         input_text = input("请输入你的选择(1—3或q)：")
 
         if input_text and input_text.strip() in ['q', 'Q']:
-            print("退出程序！")
+            print("已退出程序！")
             break
 
         if input_text and input_text.strip() in ['1', '2', '3']:
@@ -302,12 +309,14 @@ if __name__ == '__main__':
                 try:
                     urls = load_url_file('./url.txt')
                     if not urls:
-                        print('\n分享地址为空！请先在url.txt文件中输入分享地址(每行一个)')
+                        print('\n分享地址为空！请先在url.txt文件中输入分享地址(一行一个)')
                         continue
+
+                    print(f"\r检测到url.txt文件中有{len(urls)}条分享链接")
                     ok = input("请你确认是否开始批量保存(确认请按2):")
                     if ok and ok.strip() == '2':
                         for index, url in enumerate(urls):
-                            print(f"第{index + 1}条分享链接")
+                            print(f"正在转存第{index + 1}个")
                             asyncio.run(quark_file_manager.run(url.strip(), to_dir_id))
                 except FileNotFoundError:
                     with open('url.txt', 'w', encoding='utf-8'):

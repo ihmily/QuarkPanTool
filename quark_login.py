@@ -5,6 +5,9 @@ from typing import Dict, Union, List
 from playwright.sync_api import sync_playwright
 from retrying import retry
 
+CONFIG_DIR = './config'
+os.makedirs(CONFIG_DIR, exist_ok=True)
+
 
 class QuarkLogin:
     def __init__(self, headless: bool = True, slow_mo: int = 0):
@@ -16,17 +19,17 @@ class QuarkLogin:
     def save_cookies(page) -> None:
         cookie = page.context.cookies()
 
-        with open('cookies.txt', 'w', encoding='utf-8') as f:
+        with open(f'{CONFIG_DIR}/cookies.txt', 'w', encoding='utf-8') as f:
             f.write(str(cookie))
 
     @retry
     def login(self) -> None:
 
-        print("正在进行Playwright初始化...")
-        os.environ['PLAYWRIGHT_BROWSERS_PATH'] = '0'
-        result = subprocess.run(['playwright', 'install', 'firefox'])
-        if result.returncode != 0:
-            print("Playwright 安装失败！")
+        #print("正在进行Playwright初始化...")
+        #os.environ['PLAYWRIGHT_BROWSERS_PATH'] = '0'
+        #result = subprocess.run(['playwright', 'install', 'firefox'])
+        #if result.returncode != 0:
+        #    print("Playwright 安装失败！")
 
         with sync_playwright() as p:
             self.context = p.firefox.launch_persistent_context(
@@ -64,7 +67,7 @@ class QuarkLogin:
 
     def check_cookies(self) -> Union[None, Union[Dict[str, str], str]]:
         try:
-            with open('cookies.txt', 'r') as f:
+            with open(f'{CONFIG_DIR}/cookies.txt', 'r') as f:
                 content = f.read()
 
             if content and '[' in content:
@@ -84,7 +87,7 @@ class QuarkLogin:
         cookie = self.check_cookies()
         if not cookie:
             self.login()
-            with open('cookies.txt', 'r') as f:
+            with open(f'{CONFIG_DIR}/cookies.txt', 'r') as f:
                 content = f.read()
                 if not content:
                     return
@@ -102,4 +105,4 @@ if __name__ == '__main__':
     quark_login = QuarkLogin(headless=False, slow_mo=500)
     quark_login.login()
     cookies = quark_login.get_cookies()
-    print(cookies)
+    print('Cookie:', cookies)
