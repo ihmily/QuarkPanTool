@@ -29,13 +29,12 @@ playwright install firefox
 python quark.py
 ```
 
-如果不想自己部署环境，可以直接下载打包好的可执行文件压缩包 [QuarkPanTool](https://github.com/ihmily/DouyinLiveRecorder/releases) 运行。
+如果不想自己部署环境，可以直接下载打包好的可执行文件压缩包 [QuarkPanTool](https://github.com/ihmily/QuarkPanTool/releases) 运行。
 
 ## 注意事项
 
 - 首次运行会比较缓慢，请注意底部任务栏，程序会自动打开一个浏览器，让你登录夸克网盘，登录完成后，请不要手动关闭浏览器，回到软件界面按Enter键，浏览器会自动关闭并保存你的登录信息，下次运行就不需要登录了。
-- 接着会提示让你输入保存位置的文件夹ID，如果你不知道ID请直接按回车键，或者输入0，
-  0代表将你的文件保存在网盘根目录。
+- 接着会提示让你输入保存位置的文件夹ID，如果你不知道ID请直接按回车键，或者输入0代表将你的文件保存在网盘根目录。
 
 ## 效果演示
 
