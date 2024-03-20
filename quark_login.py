@@ -35,7 +35,7 @@ class QuarkLogin:
             page = self.context.pages[0]
             page.goto('https://pan.quark.cn/')
 
-            input("请在打开的浏览器中手动登录，登录成功后按 Enter 键继续...")
+            input("请在弹出的浏览器中登录夸克，登录成功后请勿手动关闭浏览器，回到本界面按 Enter 键继续...")
             self.save_cookies(page)
 
     @staticmethod
@@ -79,7 +79,6 @@ class QuarkLogin:
             return None
 
     def get_cookies(self) -> Union[str, None]:
-        # 从文件加载之前保存的 cookies
         cookie = self.check_cookies()
         if not cookie:
             self.login()
@@ -95,8 +94,6 @@ class QuarkLogin:
             return self.dict_to_cookie_str(cookie)
         elif isinstance(cookie, str):
             return cookie
-
-
 
 
 if __name__ == '__main__':

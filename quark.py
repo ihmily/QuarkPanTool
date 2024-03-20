@@ -53,7 +53,7 @@ class QuarkPanFileManager:
         async with httpx.AsyncClient() as client:
             response = await client.post(api, json=data, params=params, headers=self.headers)
             json_data = response.json()
-            return json_data["data"]["stoken"] if json_data.get('data') else ""
+            return json_data["data"]["stoken"] if json_data['data'] else ""
 
     async def get_detail(self, pwd_id: str, stoken: str) -> List[Dict[str, Union[int, str]]]:
         api = f"https://drive-pc.quark.cn/1/clouddrive/share/sharepage/detail"
@@ -224,7 +224,7 @@ class QuarkPanFileManager:
                         folder_name = ' 根目录'
                     if json_data['data']['task_title'] == '分享-转存':
                         print(f"[{self.get_datetime()}] 结束任务ID：{task_id}")
-                        print(f'[{self.get_datetime()}] 文件转存目录：“{folder_name}” 文件夹')
+                        print(f'[{self.get_datetime()}] 文件保存位置：“{folder_name}” 文件夹')
                     return json_data
             else:
                 print('任务执行失败！')
@@ -304,8 +304,8 @@ if __name__ == '__main__':
                     if not urls:
                         print('\n分享地址为空！请先在url.txt文件中输入分享地址(每行一个)')
                         continue
-                    ok = input("请你是否开始确认批量保存(确认请按2):")
-                    if ok == '1':
+                    ok = input("请你确认是否开始批量保存(确认请按2):")
+                    if ok and ok.strip() == '2':
                         for index, url in enumerate(urls):
                             print(f"第{index + 1}条分享链接")
                             asyncio.run(quark_file_manager.run(url.strip(), to_dir_id))
