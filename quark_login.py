@@ -1,3 +1,4 @@
+import os
 import subprocess
 import time
 from typing import Dict, Union, List
@@ -22,7 +23,8 @@ class QuarkLogin:
     def login(self) -> None:
 
         print("正在进行Playwright初始化...")
-        result = subprocess.run(['playwright', 'install'])
+        os.environ['PLAYWRIGHT_BROWSERS_PATH'] = '0'
+        result = subprocess.run(['playwright', 'install', 'firefox'])
         if result.returncode != 0:
             print("Playwright 安装失败！")
 
