@@ -1,3 +1,4 @@
+import subprocess
 import time
 from typing import Dict, Union, List
 from playwright.sync_api import sync_playwright
@@ -14,11 +15,17 @@ class QuarkLogin:
     def save_cookies(page) -> None:
         cookie = page.context.cookies()
 
-        with open('cookies.json', 'w', encoding='utf-8') as f:
+        with open('cookies.txt', 'w', encoding='utf-8') as f:
             f.write(str(cookie))
 
     @retry
     def login(self) -> None:
+
+        print("正在进行Playwright初始化...")
+        result = subprocess.run(['playwright', 'install'])
+        if result.returncode != 0:
+            print("Playwright 安装失败！")
+
         with sync_playwright() as p:
             self.context = p.firefox.launch_persistent_context(
                 './gpts_firefox_dir',
@@ -53,34 +60,43 @@ class QuarkLogin:
         cookie_str = '; '.join([f"{key}={value}" for key, value in cookies_dict.items()])
         return cookie_str
 
-    def check_cookies(self) -> Union[None, Dict[str, str]]:
+    def check_cookies(self) -> Union[None, Union[Dict[str, str], str]]:
         try:
-            with open('cookies.json', 'r') as f:
+            with open('cookies.txt', 'r') as f:
                 content = f.read()
-                if not content:
-                    return None
+
+            if content and '[' in content:
                 saved_cookies = eval(content)
-            cookies_dict = self.transfer_cookies(saved_cookies)
-            timestamp = int(time.time())
-            if 'expires' in cookies_dict and timestamp > int(cookies_dict['expires']):
-                return None
-            return cookies_dict
+                cookies_dict = self.transfer_cookies(saved_cookies)
+                timestamp = int(time.time())
+                if 'expires' in cookies_dict and timestamp > int(cookies_dict['expires']):
+                    return None
+                return cookies_dict
+            else:
+                return content.strip()
         except Exception as e:
             print(f"Error checking cookies: {e}")
             return None
 
     def get_cookies(self) -> Union[str, None]:
         # 从文件加载之前保存的 cookies
-        cookies_dict = self.check_cookies()
-        if not cookies_dict:
+        cookie = self.check_cookies()
+        if not cookie:
             self.login()
-            with open('cookies.json', 'r') as f:
+            with open('cookies.txt', 'r') as f:
                 content = f.read()
                 if not content:
                     return
                 saved_cookies = eval(content)
             cookies_dict = self.transfer_cookies(saved_cookies)
-        return self.dict_to_cookie_str(cookies_dict)
+            return self.dict_to_cookie_str(cookies_dict)
+
+        elif isinstance(cookie, dict):
+            return self.dict_to_cookie_str(cookie)
+        elif isinstance(cookie, str):
+            return cookie
+
+
 
 
 if __name__ == '__main__':
