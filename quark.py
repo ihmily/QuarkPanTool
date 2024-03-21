@@ -107,7 +107,6 @@ class QuarkPanFileManager:
                 page += 1
 
     async def get_sorted_file_list(self, pdir_fid=0) -> List[Dict[str, str]]:
-        """获取文件夹下的文件列表"""
         params = {
             'pr': 'ucpro',
             'fr': 'pc',
@@ -133,9 +132,26 @@ class QuarkPanFileManager:
                     folder_list.append({i['fid']: i['file_name']})
             return folder_list
 
-    async def create_dir(self, pdir_name='新建文件夹') -> None:
-        """创建文件夹"""
+    async def get_user_info(self) -> str:
 
+        params = {
+            'fr': 'pc',
+            'platform': 'pc',
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get('https://pan.quark.cn/account/info', params=params,
+                                        headers=self.headers)
+            json_data = response.json()
+            if json_data['data']:
+                nickname = json_data['data']['nickname']
+                return nickname
+            else:
+                input("登录失败！请重新运行本程序，然后在弹出的浏览器中登录夸克账号")
+                with open(f'{CONFIG_DIR}/cookies.txt', 'w', encoding='utf-8'):
+                    sys.exit(-1)
+
+    async def create_dir(self, pdir_name='新建文件夹') -> None:
         params = {
             'pr': 'ucpro',
             'fr': 'pc',
@@ -240,7 +256,7 @@ class QuarkPanFileManager:
 
     async def submit_task(self, task_id: str, retry: int = 50) -> Union[
             bool, Dict[str, Union[str, Dict[str, Union[int, str]]]]]:
-        """根据task_id进行任务"""
+
         for i in range(retry):
             print(f'[{self.get_datetime()}] 第{i + 1}次提交任务')
             submit_url = (f"https://drive-pc.quark.cn/1/clouddrive/task?pr=ucpro&fr=pc&uc_param_str=&task_id={task_id}"
@@ -260,11 +276,14 @@ class QuarkPanFileManager:
                         print(f"[{self.get_datetime()}] 结束任务ID：{task_id}")
                         print(f'[{self.get_datetime()}] 文件保存位置：“{folder_name}” 文件夹')
                     return json_data
-            elif json_data['code'] == 32003 and 'capacity limit' in json_data['message']:
-                print(f"[{self.get_datetime()}] 网盘容量不足，转存失败！")
-                sys.exit(-1)
             else:
-                print('任务执行失败！')
+                if json_data['code'] == 32003 and 'capacity limit' in json_data['message']:
+                    input(f"[{self.get_datetime()}] 转存失败，网盘容量不足！请注意当前已成功保存的个数，避免重复保存")
+                elif json_data['code'] == 41013:
+                    input(f"[{self.get_datetime()}] ”{to_dir_name}“ 网盘文件夹不存在，请重新运行按3切换保存目录后重试！")
+                else:
+                    input(f"[{self.get_datetime()}] 错误信息：{json_data['message']}")
+                sys.exit(f'[{self.get_datetime()}] 已退出程序')
 
     async def load_folder_id(self, renew=False) -> Union[tuple, None]:
         try:
@@ -279,9 +298,14 @@ class QuarkPanFileManager:
             with open(f'{CONFIG_DIR}/save_dir.conf', 'w', encoding='utf-8'):
                 pdir_config = None
 
-        if not renew and pdir_config and len(pdir_config) > 1:
+        if not renew and not pdir_config:
+            pdir_id = '0'
+            dir_name = '根目录'
+            self.save_pid(pdir_id, dir_name)
+        elif not renew and len(pdir_config) > 1:
             pdir_id, dir_name = pdir_config
             self.save_pid(pdir_id, dir_name)
+
         else:
             dir_name = ''
             pdir_id = input(f'[{self.get_datetime()}] 请输入保存位置的文件夹ID(可为空): ')
@@ -301,7 +325,9 @@ class QuarkPanFileManager:
                     item = fd_list[int(num) - 1]
                     pdir_id, dir_name = next(iter(item.items()))
                     self.save_pid(pdir_id, dir_name)
+
         if not renew:
+            print(f'[{self.get_datetime()}] 用户名：{await self.get_user_info()}')
             print(f'[{self.get_datetime()}] 你当前选择的网盘保存目录: ”{dir_name}“ 文件夹')
         return pdir_id, dir_name
 
@@ -334,7 +360,7 @@ if __name__ == '__main__':
 
         if input_text and input_text.strip() in ['q', 'Q']:
             print("已退出程序！")
-            break
+            sys.exit(0)
 
         if input_text and input_text.strip() in ['1', '2', '3', '4']:
             if input_text.strip() == '1':
@@ -357,7 +383,7 @@ if __name__ == '__main__':
                             asyncio.run(quark_file_manager.run(url.strip(), to_dir_id))
                 except FileNotFoundError:
                     with open('url.txt', 'w', encoding='utf-8'):
-                        break
+                        sys.exit(-1)
 
             elif input_text.strip() == '3':
                 to_dir_id, to_dir_name = asyncio.run(quark_file_manager.load_folder_id(renew=True))
