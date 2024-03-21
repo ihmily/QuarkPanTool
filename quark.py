@@ -1,5 +1,6 @@
 import asyncio
 import random
+import sys
 import time
 from datetime import datetime
 from typing import List, Dict, Union
@@ -132,6 +133,39 @@ class QuarkPanFileManager:
                     folder_list.append({i['fid']: i['file_name']})
             return folder_list
 
+    async def create_dir(self, pdir_name='新建文件夹') -> None:
+        """创建文件夹"""
+
+        params = {
+            'pr': 'ucpro',
+            'fr': 'pc',
+            'uc_param_str': '',
+            '__dt': random.randint(100, 9999),
+            '__t': self.generate_timestamp(13),
+        }
+
+        json_data = {
+            'pdir_fid': '0',
+            'file_name': pdir_name,
+            'dir_path': '',
+            'dir_init_lock': False,
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post('https://drive-pc.quark.cn/1/clouddrive/file', params=params,
+                                         json=json_data, headers=self.headers)
+            json_data = response.json()
+            if json_data["code"] == 0:
+                print(f'[{self.get_datetime()}] 根目录下 “{pdir_name}” 文件夹创建成功！')
+                self.save_pid(json_data["data"]["fid"], pdir_name)
+                global to_dir_id
+                to_dir_id = json_data["data"]["fid"]
+                print(f"[{self.get_datetime()}] 自动将保存目录切换至“{pdir_name}”文件夹")
+            elif json_data["code"] == 23008:
+                print(f'[{self.get_datetime()}] 文件夹同名冲突，请更换一个文件夹名称后重试')
+            else:
+                print(f"[{self.get_datetime()}] 错误信息：{json_data['message']}")
+
     async def run(self, surl: str, folder_id: Union[str, None] = None) -> None:
         self.folder_id = folder_id
         print(f'[{self.get_datetime()}] 文件分享链接：{surl}')
@@ -226,6 +260,9 @@ class QuarkPanFileManager:
                         print(f"[{self.get_datetime()}] 结束任务ID：{task_id}")
                         print(f'[{self.get_datetime()}] 文件保存位置：“{folder_name}” 文件夹')
                     return json_data
+            elif json_data['code'] == 32003 and 'capacity limit' in json_data['message']:
+                print(f"[{self.get_datetime()}] 网盘容量不足，转存失败！")
+                sys.exit(-1)
             else:
                 print('任务执行失败！')
 
@@ -278,12 +315,12 @@ def load_url_file(fpath: str) -> list:
 
 
 def print_menu() -> None:
-    print("╔═════════════════════════════════════════════════════════════════════════════════╗")
-    print("║                                  Author: Hmily                                  ║")
-    print("║                   GitHub: https://github.com/ihmily/QuarkPanTool                ║")
-    print("╠═════════════════════════════════════════════════════════════════════════════════╣")
-    print("║             1.单个分享地址转存   2.批量分享地址转存   3.切换保存目录   q.退出            ║")
-    print("╚═════════════════════════════════════════════════════════════════════════════════╝")
+    print("╔═════════════════════════════════════════════════════════════════════════════════════════╗")
+    print("║                                    Author: Hmily                                        ║")
+    print("║                     GitHub: https://github.com/ihmily/QuarkPanTool                      ║")
+    print("╠═════════════════════════════════════════════════════════════════════════════════════════╣")
+    print("║       1.单个分享地址转存   2.批量分享地址转存   3.切换保存目录   4.创建文件夹   q.退出             ║")
+    print("╚═════════════════════════════════════════════════════════════════════════════════════════╝")
 
 
 if __name__ == '__main__':
@@ -293,13 +330,13 @@ if __name__ == '__main__':
 
         to_dir_id, to_dir_name = asyncio.run(quark_file_manager.load_folder_id())
 
-        input_text = input("请输入你的选择(1—3或q)：")
+        input_text = input("请输入你的选择(1—4或q)：")
 
         if input_text and input_text.strip() in ['q', 'Q']:
             print("已退出程序！")
             break
 
-        if input_text and input_text.strip() in ['1', '2', '3']:
+        if input_text and input_text.strip() in ['1', '2', '3', '4']:
             if input_text.strip() == '1':
                 url = input("请输入夸克文件分享地址：")
                 if url and url.strip():
@@ -325,6 +362,10 @@ if __name__ == '__main__':
             elif input_text.strip() == '3':
                 to_dir_id, to_dir_name = asyncio.run(quark_file_manager.load_folder_id(renew=True))
                 print(f"切换保存目录至网盘 ”{to_dir_name}“ 文件夹\n")
+
+            elif input_text.strip() == '4':
+                create_name = input("请输入需要创建的文件夹名称：")
+                asyncio.run(quark_file_manager.create_dir(pdir_name=create_name))
 
         else:
             print("输入无效，请重新输入")
