@@ -45,7 +45,7 @@ python quark.py
 
 ## 效果演示
 
-![ScreenShot1](D:\Typora\images\Snipaste_2024-03-21_21-51-22.jpg)
+![ScreenShot1](./images/Snipaste_2024-03-21_21-51-22.jpg)
 
 ## 许可证
 
