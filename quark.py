@@ -52,7 +52,8 @@ class QuarkPanFileManager:
         api = f"https://drive-pc.quark.cn/1/clouddrive/share/sharepage/token"
         data = {"pwd_id": pwd_id, "passcode": ""}
         async with httpx.AsyncClient() as client:
-            response = await client.post(api, json=data, params=params, headers=self.headers)
+            timeout = httpx.Timeout(60.0,connect=60.0)
+            response = await client.post(api, json=data, params=params, headers=self.headers, timeout=timeout)
             json_data = response.json()
             return json_data["data"]["stoken"] if json_data['data'] else ""
 
@@ -77,7 +78,8 @@ class QuarkPanFileManager:
                     '__dt': random.randint(600, 9999),
                     '__t': self.generate_timestamp(13),
                 }
-                response = await client.get(api, headers=self.headers, params=params)
+                timeout = httpx.Timeout(60.0,connect=60.0)
+                response = await client.get(api, headers=self.headers, params=params, timeout=timeout)
                 json_data = response.json()
 
                 _total = json_data['metadata']['_total']
@@ -122,8 +124,9 @@ class QuarkPanFileManager:
         }
 
         async with httpx.AsyncClient() as client:
+            timeout = httpx.Timeout(60.0,connect=60.0)
             response = await client.get('https://drive-pc.quark.cn/1/clouddrive/file/sort', params=params,
-                                        headers=self.headers)
+                                        headers=self.headers, timeout=timeout)
             json_data = response.json()
             _list = json_data['data']['list']
             folder_list = []
@@ -213,6 +216,8 @@ class QuarkPanFileManager:
             if not self.folder_id:
                 print('保存目录ID不合法，请重新获取，如果无法获取，请输入0作为文件夹ID')
                 return
+            # 随机暂停2-5秒
+            # await asyncio.sleep(random.randint(2, 5))
 
             task_id = await self.get_task_id(pwd_id, stoken, fid_list, share_fid_token_list, to_pdir_fid=self.folder_id)
             await self.submit_task(task_id)
@@ -234,7 +239,8 @@ class QuarkPanFileManager:
                 "stoken": stoken, "pdir_fid": "0", "scene": "link"}
 
         async with httpx.AsyncClient() as client:
-            response = await client.post(task_url, json=data, headers=self.headers, params=params)
+            timeout = httpx.Timeout(60.0,connect=60.0)
+            response = await client.post(task_url, json=data, headers=self.headers, params=params, timeout=timeout)
             json_data = response.json()
             task_id = json_data['data']['task_id']
             print(f'[{self.get_datetime()}] 获取任务ID：{task_id}')
@@ -258,12 +264,15 @@ class QuarkPanFileManager:
             bool, Dict[str, Union[str, Dict[str, Union[int, str]]]]]:
 
         for i in range(retry):
+            # 随机暂停100-50毫秒
+            await asyncio.sleep(random.randint(500,1000) / 1000)
             print(f'[{self.get_datetime()}] 第{i + 1}次提交任务')
             submit_url = (f"https://drive-pc.quark.cn/1/clouddrive/task?pr=ucpro&fr=pc&uc_param_str=&task_id={task_id}"
                           f"&retry_index={i}&__dt=21192&__t={self.generate_timestamp(13)}")
 
             async with httpx.AsyncClient() as client:
-                response = await client.get(submit_url, headers=self.headers)
+                timeout = httpx.Timeout(60.0,connect=60.0)
+                response = await client.get(submit_url, headers=self.headers, timeout=timeout)
                 json_data = response.json()
 
             if json_data['message'] == 'ok':
