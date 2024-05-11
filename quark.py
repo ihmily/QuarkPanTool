@@ -52,7 +52,7 @@ class QuarkPanFileManager:
         api = f"https://drive-pc.quark.cn/1/clouddrive/share/sharepage/token"
         data = {"pwd_id": pwd_id, "passcode": ""}
         async with httpx.AsyncClient() as client:
-            timeout = httpx.Timeout(60.0,connect=60.0)
+            timeout = httpx.Timeout(60.0, connect=60.0)
             response = await client.post(api, json=data, params=params, headers=self.headers, timeout=timeout)
             json_data = response.json()
             return json_data["data"]["stoken"] if json_data['data'] else ""
@@ -78,7 +78,7 @@ class QuarkPanFileManager:
                     '__dt': random.randint(600, 9999),
                     '__t': self.generate_timestamp(13),
                 }
-                timeout = httpx.Timeout(60.0,connect=60.0)
+                timeout = httpx.Timeout(60.0, connect=60.0)
                 response = await client.get(api, headers=self.headers, params=params, timeout=timeout)
                 json_data = response.json()
 
@@ -124,7 +124,7 @@ class QuarkPanFileManager:
         }
 
         async with httpx.AsyncClient() as client:
-            timeout = httpx.Timeout(60.0,connect=60.0)
+            timeout = httpx.Timeout(60.0, connect=60.0)
             response = await client.get('https://drive-pc.quark.cn/1/clouddrive/file/sort', params=params,
                                         headers=self.headers, timeout=timeout)
             json_data = response.json()
@@ -143,8 +143,9 @@ class QuarkPanFileManager:
         }
 
         async with httpx.AsyncClient() as client:
+            timeout = httpx.Timeout(60.0, connect=60.0)
             response = await client.get('https://pan.quark.cn/account/info', params=params,
-                                        headers=self.headers)
+                                        headers=self.headers, timeout=timeout)
             json_data = response.json()
             if json_data['data']:
                 nickname = json_data['data']['nickname']
@@ -171,8 +172,9 @@ class QuarkPanFileManager:
         }
 
         async with httpx.AsyncClient() as client:
+            timeout = httpx.Timeout(60.0, connect=60.0)
             response = await client.post('https://drive-pc.quark.cn/1/clouddrive/file', params=params,
-                                         json=json_data, headers=self.headers)
+                                         json=json_data, headers=self.headers, timeout=timeout)
             json_data = response.json()
             if json_data["code"] == 0:
                 print(f'[{self.get_datetime()}] 根目录下 “{pdir_name}” 文件夹创建成功！')
@@ -239,7 +241,7 @@ class QuarkPanFileManager:
                 "stoken": stoken, "pdir_fid": "0", "scene": "link"}
 
         async with httpx.AsyncClient() as client:
-            timeout = httpx.Timeout(60.0,connect=60.0)
+            timeout = httpx.Timeout(60.0, connect=60.0)
             response = await client.post(task_url, json=data, headers=self.headers, params=params, timeout=timeout)
             json_data = response.json()
             task_id = json_data['data']['task_id']
@@ -261,17 +263,17 @@ class QuarkPanFileManager:
             return formatted_time
 
     async def submit_task(self, task_id: str, retry: int = 50) -> Union[
-            bool, Dict[str, Union[str, Dict[str, Union[int, str]]]]]:
+                bool, Dict[str, Union[str, Dict[str, Union[int, str]]]]]:
 
         for i in range(retry):
             # 随机暂停100-50毫秒
-            await asyncio.sleep(random.randint(500,1000) / 1000)
+            await asyncio.sleep(random.randint(500, 1000) / 1000)
             print(f'[{self.get_datetime()}] 第{i + 1}次提交任务')
             submit_url = (f"https://drive-pc.quark.cn/1/clouddrive/task?pr=ucpro&fr=pc&uc_param_str=&task_id={task_id}"
                           f"&retry_index={i}&__dt=21192&__t={self.generate_timestamp(13)}")
 
             async with httpx.AsyncClient() as client:
-                timeout = httpx.Timeout(60.0,connect=60.0)
+                timeout = httpx.Timeout(60.0, connect=60.0)
                 response = await client.get(submit_url, headers=self.headers, timeout=timeout)
                 json_data = response.json()
 
