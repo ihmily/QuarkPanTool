@@ -303,12 +303,13 @@ class QuarkPanFileManager:
             timeout = httpx.Timeout(60.0, connect=60.0)
             response = await client.post(download_api, json=data, headers=self.headers, params=params, timeout=timeout)
             json_data = response.json()
-            data_list = json_data['data']
-            if json_data['status'] == 200 and data_list:
-                custom_print('文件下载地址列表获取成功')
-            else:
-                custom_print('文件下载地址列表获取失败')
+            data_list = json_data.get('data', None)
+            if json_data['status'] != 200:
+                custom_print(f"文件下载地址列表获取失败, {json_data['message']}")
                 return
+            elif data_list:
+                custom_print('文件下载地址列表获取成功')
+
             save_folder = f'downloads/{folder}' if folder else 'downloads'
             os.makedirs(save_folder, exist_ok=True)
             n = 0
