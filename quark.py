@@ -275,7 +275,8 @@ class QuarkPanFileManager:
     @staticmethod
     async def download_file(download_url: str, save_path: str, headers: dict) -> None:
         async with httpx.AsyncClient() as client:
-            async with client.stream("GET", download_url, headers=headers) as response:
+            timeout = httpx.Timeout(60.0, connect=60.0)
+            async with client.stream("GET", download_url, headers=headers, timeout=timeout) as response:
                 total_size = int(response.headers["content-length"])
                 with open(save_path, "wb") as f:
                     with tqdm(total=total_size, unit="B", unit_scale=True,
@@ -445,10 +446,10 @@ if __name__ == '__main__':
                 try:
                     urls = load_url_file('./url.txt')
                     if not urls:
-                        print('\n分享地址为空！请先在url.txt文件中输入分享地址(一行一个)')
+                        custom_print('\n分享地址为空！请先在url.txt文件中输入分享地址(一行一个)')
                         continue
 
-                    print(f"\r检测到url.txt文件中有{len(urls)}条分享链接")
+                    custom_print(f"\r检测到url.txt文件中有{len(urls)}条分享链接")
                     ok = input("请你确认是否开始批量保存(确认请按2):")
                     if ok and ok.strip() == '2':
                         for index, url in enumerate(urls):
@@ -460,7 +461,7 @@ if __name__ == '__main__':
 
             elif input_text.strip() == '3':
                 to_dir_id, to_dir_name = asyncio.run(quark_file_manager.load_folder_id(renew=True))
-                print(f"切换保存目录至网盘 ”{to_dir_name}“ 文件夹\n")
+                custom_print(f"已切换保存目录至网盘 ”{to_dir_name}“ 文件夹\n")
 
             elif input_text.strip() == '4':
                 create_name = input("请输入需要创建的文件夹名称：")
@@ -490,4 +491,4 @@ if __name__ == '__main__':
                         sys.exit(-1)
 
         else:
-            print("输入无效，请重新输入")
+            custom_print("输入无效，请重新输入")
