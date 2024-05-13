@@ -415,7 +415,7 @@ def load_url_file(fpath: str) -> List[str]:
 
 def print_menu() -> None:
     print("╔══════════════════════════════════════════════════════════════════════════════════════════════════════╗")
-    print("║                                         Author: Hmily                                                ║")
+    print("║                                  Author: Hmily  Version: 0.0.2                                       ║")
     print("║                          GitHub: https://github.com/ihmily/QuarkPanTool                              ║")
     print("╠══════════════════════════════════════════════════════════════════════════════════════════════════════╣")
     print("║     1.单个分享地址转存   2.批量分享地址转存   3.切换网盘保存目录   4.创建网盘文件夹   5.下载到本地   q.退出        ║")
@@ -483,7 +483,6 @@ if __name__ == '__main__':
                                 continue
 
                             for index, url in enumerate(urls):
-                                print(f"正在下载第{index + 1}个")
                                 asyncio.run(quark_file_manager.run(url.strip(), to_dir_id, download=True))
 
                 except FileNotFoundError:
