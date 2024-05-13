@@ -11,6 +11,7 @@ QuarkPanTool 是一个简单易用的小工具，旨在帮助用户快速批量�
 - 运行稳定：基于playwright支持网页登录夸克网盘，无需手动获取Cookie。
 - 轻松操作：简洁直观的命令行界面，方便快捷地完成文件转存。
 - 批量转存：支持一次性转存多个夸克网盘分享链接中的文件。
+- 本地下载：支持批量下载网盘文件夹中的所有文件。
 
 ## 如何使用
 
@@ -35,7 +36,7 @@ playwright install firefox
 python quark.py
 ```
 
-运行后会使用playwright进行登录操作，当然也可以自己手动获取cookie填写到config/cookies.txt文件中。
+运行后会使用playwright进行登录操作，当然也可以自己手动获取cookie填写到config/cookies.txt文件中。如果想切换登录账号，直接将cookies.txt文件清空，然后打开软件重新登录即可。
 
 ## 注意事项
 
@@ -45,7 +46,7 @@ python quark.py
 
 ## 效果演示
 
-![ScreenShot1](./images/Snipaste_2024-03-21_21-51-22.jpg)
+![ScreenShot1](./images/Snipaste_2024-05-13_20-05-34.jpg)
 
 ## 许可证
 
