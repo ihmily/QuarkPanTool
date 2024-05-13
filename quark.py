@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import asyncio
 import random
 import sys
@@ -23,6 +25,18 @@ class QuarkPanFileManager:
             'cookie': self.get_cookies(),
         }
         self.folder_id: Union[str, None] = None
+
+    @staticmethod
+    def get_datetime(timestamp: Union[int, float, None] = None, fmt: str = "%Y-%m-%d %H:%M:%S") -> str:
+        if timestamp is None or not isinstance(timestamp, (int, float)):
+            return datetime.today().strftime(fmt)
+        else:
+            dt = datetime.fromtimestamp(timestamp)
+            formatted_time = dt.strftime(fmt)
+            return formatted_time
+
+    def custom_print(self, message):
+        print(f'[{self.get_datetime()}] {message}')
 
     @staticmethod
     def get_cookies() -> str:
@@ -55,7 +69,12 @@ class QuarkPanFileManager:
             timeout = httpx.Timeout(60.0, connect=60.0)
             response = await client.post(api, json=data, params=params, headers=self.headers, timeout=timeout)
             json_data = response.json()
-            return json_data["data"]["stoken"] if json_data['data'] else ""
+            if json_data['status'] == 200 and json_data['data']:
+                stoken = json_data["data"]["stoken"]
+            else:
+                stoken = ''
+                self.custom_print(f"文件转存失败，{json_data['message']}")
+            return stoken
 
     async def get_detail(self, pwd_id: str, stoken: str) -> List[Dict[str, Union[int, str]]]:
         api = f"https://drive-pc.quark.cn/1/clouddrive/share/sharepage/detail"
@@ -177,21 +196,23 @@ class QuarkPanFileManager:
                                          json=json_data, headers=self.headers, timeout=timeout)
             json_data = response.json()
             if json_data["code"] == 0:
-                print(f'[{self.get_datetime()}] 根目录下 “{pdir_name}” 文件夹创建成功！')
+                self.custom_print(f'根目录下 “{pdir_name}” 文件夹创建成功！')
                 self.save_pid(json_data["data"]["fid"], pdir_name)
                 global to_dir_id
                 to_dir_id = json_data["data"]["fid"]
-                print(f"[{self.get_datetime()}] 自动将保存目录切换至“{pdir_name}”文件夹")
+                self.custom_print(f"自动将保存目录切换至“{pdir_name}”文件夹")
             elif json_data["code"] == 23008:
-                print(f'[{self.get_datetime()}] 文件夹同名冲突，请更换一个文件夹名称后重试')
+                self.custom_print(f'文件夹同名冲突，请更换一个文件夹名称后重试')
             else:
-                print(f"[{self.get_datetime()}] 错误信息：{json_data['message']}")
+                self.custom_print(f"错误信息：{json_data['message']}")
 
     async def run(self, surl: str, folder_id: Union[str, None] = None) -> None:
         self.folder_id = folder_id
-        print(f'[{self.get_datetime()}] 文件分享链接：{surl}')
+        self.custom_print(f'文件分享链接：{surl}')
         pwd_id = self.get_pwd_id(surl)
         stoken = await self.get_stoken(pwd_id)
+        if not stoken:
+            return
         data_list = await self.get_detail(pwd_id, stoken)
 
         files_count = 0
@@ -208,9 +229,9 @@ class QuarkPanFileManager:
                 else:
                     files_count += 1
                     files_list.append(data["file_name"])
-            print(f'[{self.get_datetime()}] 转存总数：{total_files_count}，文件数：{files_count}，文件夹数：{folders_count}')
-            print(f'[{self.get_datetime()}] 文件转存列表：{files_list}')
-            print(f'[{self.get_datetime()}] 文件夹转存列表：{folders_list}')
+            self.custom_print(f'转存总数：{total_files_count}，文件数：{files_count}，文件夹数：{folders_count}')
+            self.custom_print(f'文件转存列表：{files_list}')
+            self.custom_print(f'文件夹转存列表：{folders_list}')
 
             fid_list = [i["fid"] for i in data_list]
             share_fid_token_list = [i["share_fid_token"] for i in data_list]
@@ -245,7 +266,7 @@ class QuarkPanFileManager:
             response = await client.post(task_url, json=data, headers=self.headers, params=params, timeout=timeout)
             json_data = response.json()
             task_id = json_data['data']['task_id']
-            print(f'[{self.get_datetime()}] 获取任务ID：{task_id}')
+            self.custom_print(f'获取任务ID：{task_id}')
             return task_id
 
     @staticmethod
@@ -253,22 +274,13 @@ class QuarkPanFileManager:
         with open(f'{CONFIG_DIR}/save_dir.conf', 'w', encoding='utf-8') as f:
             f.write(f"{pid},{name}")
 
-    @staticmethod
-    def get_datetime(timestamp: Union[int, float, None] = None, fmt: str = "%Y-%m-%d %H:%M:%S") -> str:
-        if timestamp is None or not isinstance(timestamp, (int, float)):
-            return datetime.today().strftime(fmt)
-        else:
-            dt = datetime.fromtimestamp(timestamp)
-            formatted_time = dt.strftime(fmt)
-            return formatted_time
-
     async def submit_task(self, task_id: str, retry: int = 50) -> Union[
                 bool, Dict[str, Union[str, Dict[str, Union[int, str]]]]]:
 
         for i in range(retry):
             # 随机暂停100-50毫秒
             await asyncio.sleep(random.randint(500, 1000) / 1000)
-            print(f'[{self.get_datetime()}] 第{i + 1}次提交任务')
+            self.custom_print(f'第{i + 1}次提交任务')
             submit_url = (f"https://drive-pc.quark.cn/1/clouddrive/task?pr=ucpro&fr=pc&uc_param_str=&task_id={task_id}"
                           f"&retry_index={i}&__dt=21192&__t={self.generate_timestamp(13)}")
 
@@ -284,8 +296,8 @@ class QuarkPanFileManager:
                     else:
                         folder_name = ' 根目录'
                     if json_data['data']['task_title'] == '分享-转存':
-                        print(f"[{self.get_datetime()}] 结束任务ID：{task_id}")
-                        print(f'[{self.get_datetime()}] 文件保存位置：“{folder_name}” 文件夹')
+                        self.custom_print(f"结束任务ID：{task_id}")
+                        self.custom_print(f'文件保存位置：“{folder_name}” 文件夹')
                     return json_data
             else:
                 if json_data['code'] == 32003 and 'capacity limit' in json_data['message']:
@@ -338,8 +350,8 @@ class QuarkPanFileManager:
                     self.save_pid(pdir_id, dir_name)
 
         if not renew:
-            print(f'[{self.get_datetime()}] 用户名：{await self.get_user_info()}')
-            print(f'[{self.get_datetime()}] 你当前选择的网盘保存目录: ”{dir_name}“ 文件夹')
+            self.custom_print(f'用户名：{await self.get_user_info()}')
+            self.custom_print(f'你当前选择的网盘保存目录: ”{dir_name}“ 文件夹')
         return pdir_id, dir_name
 
 
