@@ -181,11 +181,11 @@ class QuarkPanFileManager:
                                          json=json_data, headers=self.headers, timeout=timeout)
             json_data = response.json()
             if json_data["code"] == 0:
-                custom_print(f'根目录下 “{pdir_name}” 文件夹创建成功！')
+                custom_print(f'根目录下 {pdir_name} 文件夹创建成功！')
                 self.save_pid(json_data["data"]["fid"], pdir_name)
                 global to_dir_id
                 to_dir_id = json_data["data"]["fid"]
-                custom_print(f"自动将保存目录切换至“{pdir_name}”文件夹")
+                custom_print(f"自动将保存目录切换至 {pdir_name} 文件夹")
             elif json_data["code"] == 23008:
                 custom_print(f'文件夹同名冲突，请更换一个文件夹名称后重试')
             else:
@@ -348,7 +348,7 @@ class QuarkPanFileManager:
                         folder_name = ' 根目录'
                     if json_data['data']['task_title'] == '分享-转存':
                         custom_print(f"结束任务ID：{task_id}")
-                        custom_print(f'文件保存位置：“{folder_name}” 文件夹')
+                        custom_print(f'文件保存位置：{folder_name} 文件夹')
                     return json_data
             else:
                 if json_data['code'] == 32003 and 'capacity limit' in json_data['message']:
@@ -402,7 +402,7 @@ class QuarkPanFileManager:
 
         if not renew:
             custom_print(f'用户名：{await self.get_user_info()}')
-            custom_print(f'你当前选择的网盘保存目录: ”{dir_name}“ 文件夹')
+            custom_print(f'你当前选择的网盘保存目录: {dir_name} 文件夹')
         return pdir_id, dir_name
 
 
@@ -461,7 +461,7 @@ if __name__ == '__main__':
 
             elif input_text.strip() == '3':
                 to_dir_id, to_dir_name = asyncio.run(quark_file_manager.load_folder_id(renew=True))
-                custom_print(f"已切换保存目录至网盘 ”{to_dir_name}“ 文件夹\n")
+                custom_print(f"已切换保存目录至网盘 {to_dir_name} 文件夹\n")
 
             elif input_text.strip() == '4':
                 create_name = input("请输入需要创建的文件夹名称：")
