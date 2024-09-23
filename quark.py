@@ -395,7 +395,7 @@ class QuarkPanFileManager:
                 else:
                     _pdir_id = json_data.get('pdir_id', '0')
                     _dir_name = json_data.get('dir_name', '根目录')
-        except json.decoder.JSONDecodeError:
+        except (json.decoder.JSONDecodeError, FileNotFoundError):
             new_config = {'user': self.user, 'pdir_id': self.pdir_id, 'dir_name': self.dir_name}
             save_config(f'{CONFIG_DIR}/config.json', content=json.dumps(new_config, ensure_ascii=False))
         return _user, _pdir_id, _dir_name
