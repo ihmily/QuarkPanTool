@@ -68,7 +68,7 @@ class QuarkPanFileManager:
             return stoken
 
     async def get_detail(self, pwd_id: str, stoken: str, pdir_fid: str = '0') -> Tuple[
-            str, List[Dict[str, Union[int, str]]]]:
+                str, List[Dict[str, Union[int, str]]]]:
         api = f"https://drive-pc.quark.cn/1/clouddrive/share/sharepage/detail"
         page = 1
         file_list: List[Dict[str, Union[int, str]]] = []
@@ -193,9 +193,9 @@ class QuarkPanFileManager:
                 to_dir_id = json_data["data"]["fid"]
                 custom_print(f"自动将保存目录切换至 {pdir_name} 文件夹")
             elif json_data["code"] == 23008:
-                custom_print(f'文件夹同名冲突，请更换一个文件夹名称后重试')
+                custom_print(f'文件夹同名冲突，请更换一个文件夹名称后重试', error_msg=True)
             else:
-                custom_print(f"错误信息：{json_data['message']}")
+                custom_print(f"错误信息：{json_data['message']}", error_msg=True)
 
     async def run(self, surl: str, folder_id: Union[str, None] = None, download: bool = False) -> None:
         self.folder_id = folder_id
@@ -330,7 +330,7 @@ class QuarkPanFileManager:
             json_data = response.json()
             data_list = json_data.get('data', None)
             if json_data['status'] != 200:
-                custom_print(f"文件下载地址列表获取失败, {json_data['message']}")
+                custom_print(f"文件下载地址列表获取失败, {json_data['message']}", error_msg=True)
                 return
             elif data_list:
                 custom_print('文件下载地址列表获取成功')
@@ -347,7 +347,7 @@ class QuarkPanFileManager:
                 await self.download_file(download_url, save_path, headers=self.headers)
 
     async def submit_task(self, task_id: str, retry: int = 50) -> Union[
-            bool, Dict[str, Union[str, Dict[str, Union[int, str]]]]]:
+                bool, Dict[str, Union[str, Dict[str, Union[int, str]]]]]:
 
         for i in range(retry):
             # 随机暂停100-50毫秒
@@ -373,12 +373,13 @@ class QuarkPanFileManager:
                     return json_data
             else:
                 if json_data['code'] == 32003 and 'capacity limit' in json_data['message']:
-                    input(f"[{get_datetime()}] 转存失败，网盘容量不足！请注意当前已成功保存的个数，避免重复保存")
+                    custom_print("转存失败，网盘容量不足！请注意当前已成功保存的个数，避免重复保存", error_msg=True)
                 elif json_data['code'] == 41013:
-                    input(f"[{get_datetime()}] ”{to_dir_name}“ 网盘文件夹不存在，请重新运行按3切换保存目录后重试！")
+                    custom_print(f"”{to_dir_name}“ 网盘文件夹不存在，请重新运行按3切换保存目录后重试！", error_msg=True)
                 else:
-                    input(f"[{get_datetime()}] 错误信息：{json_data['message']}")
-                sys.exit(f'[{get_datetime()}] 已退出程序')
+                    custom_print(f"错误信息：{json_data['message']}", error_msg=True)
+                input(f'[{get_datetime()}] 已退出程序')
+                sys.exit()
 
     def init_config(self, _user, _pdir_id, _dir_name):
         try:
@@ -425,8 +426,11 @@ class QuarkPanFileManager:
                         table.add_row([idx, key, value])
                     print(table)
                     num = input(f'[{get_datetime()}] 请选择你要保存的位置（输入对应序号）: ')
-                    while not num:
-                        print('请输入文件夹对应序号')
+                    if not num or int(num) > len(fd_list):
+                        custom_print('输入序号不存在，保存目录切换失败', error_msg=True)
+                        json_data = read_config(f'{CONFIG_DIR}/config.json', 'json')
+                        return json_data['pdir_id'], json_data['dir_name']
+
                     item = fd_list[int(num) - 1]
                     self.pdir_id, self.dir_name = next(iter(item.items()))
                     new_config = {'user': self.user, 'pdir_id': self.pdir_id, 'dir_name': self.dir_name}
@@ -651,7 +655,8 @@ def print_menu() -> None:
     print("║                                  Author: Hmily  Version: 0.0.3                                       ║")
     print("║                          GitHub: https://github.com/ihmily/QuarkPanTool                              ║")
     print("╠══════════════════════════════════════════════════════════════════════════════════════════════════════╣")
-    print(r"║     1.分享地址转存文件   2.批量生成分享链接   3.切换网盘保存目录   4.创建网盘文件夹   5.下载到本地   q.退出        ║")
+    print(
+        r"║     1.分享地址转存文件   2.批量生成分享链接   3.切换网盘保存目录   4.创建网盘文件夹   5.下载到本地   6.登录        ║")
     print("╚══════════════════════════════════════════════════════════════════════════════════════════════════════╝")
 
 
@@ -662,13 +667,13 @@ if __name__ == '__main__':
 
         to_dir_id, to_dir_name = asyncio.run(quark_file_manager.load_folder_id())
 
-        input_text = input("请输入你的选择(1—5或q)：")
+        input_text = input("请输入你的选择(1—6或q退出)：")
 
         if input_text and input_text.strip() in ['q', 'Q']:
             print("已退出程序！")
             sys.exit(0)
 
-        if input_text and input_text.strip() in [str(i) for i in range(1, 6)]:
+        if input_text and input_text.strip() in [str(i) for i in range(1, 7)]:
             if input_text.strip() == '1':
                 save_option = input("是否批量转存(1是 2否)：")
                 if save_option and save_option == '1':
@@ -754,6 +759,11 @@ if __name__ == '__main__':
                 except FileNotFoundError:
                     with open('url.txt', 'w', encoding='utf-8'):
                         sys.exit(-1)
+
+            elif input_text.strip() == '6':
+                save_config(f'{CONFIG_DIR}/cookies.txt', '')
+                quark_file_manager = QuarkPanFileManager(headless=False, slow_mo=500)
+                quark_file_manager.get_cookies()
 
         else:
             custom_print("输入无效，请重新输入")

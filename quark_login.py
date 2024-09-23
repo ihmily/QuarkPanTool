@@ -33,7 +33,7 @@ class QuarkLogin:
 
         with sync_playwright() as p:
             self.context = p.firefox.launch_persistent_context(
-                './gpts_firefox_dir',
+                './web_browser_data',
                 headless=self.headless,
                 slow_mo=self.slow_mo,
                 args=['--start-maximized'],

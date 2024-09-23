@@ -6,6 +6,7 @@ import string
 import time
 from datetime import datetime
 from typing import Union
+from colorama import Fore, Style
 
 
 def get_datetime(timestamp: Union[int, float, None] = None, fmt: str = "%Y-%m-%d %H:%M:%S") -> str:
@@ -17,8 +18,11 @@ def get_datetime(timestamp: Union[int, float, None] = None, fmt: str = "%Y-%m-%d
         return formatted_time
 
 
-def custom_print(message) -> None:
-    print(f'[{get_datetime()}] {message}')
+def custom_print(message, error_msg=False) -> None:
+    if error_msg:
+        print(Fore.RED + f'[{get_datetime()}] {message}' + Style.RESET_ALL)
+    else:
+        print(f'[{get_datetime()}] {message}')
 
 
 def get_timestamp(length: int) -> int:
