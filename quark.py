@@ -209,6 +209,7 @@ class QuarkPanFileManager:
         folders_count = 0
         files_list: List[str] = []
         folders_list: List[str] = []
+        folders_map = {}
         files_id_list = []
         file_fid_list = []
 
@@ -218,6 +219,10 @@ class QuarkPanFileManager:
                 if data['dir']:
                     folders_count += 1
                     folders_list.append(data["file_name"])
+                    folders_map[data["fid"]] = {
+                        "file_name": data["file_name"],
+                        "pdir_fid": data["pdir_fid"]
+                    }
                 else:
                     files_count += 1
                     files_list.append(data["file_name"])
@@ -248,11 +253,23 @@ class QuarkPanFileManager:
                             for i2 in data_list2:
                                 custom_print(f'开始下载：{i2["file_name"]} 文件夹中的{i2["include_items"]}个文件')
                                 is_owner, file_data_list = await self.get_detail(pwd_id, stoken, pdir_fid=i2['fid'])
+
+                                # record folder's fid start
+                                if file_data_list:
+                                    for data in file_data_list:
+                                        if data['dir']:
+                                            folders_map[data["fid"]] = {
+                                                "file_name": data["file_name"],
+                                                "pdir_fid": data["pdir_fid"]
+                                            }
+                                # record folder's fid stop
+
                                 folder = i["file_name"]
                                 fid_list = [i["fid"] for i in file_data_list]
-                                await self.quark_file_download(fid_list, folder=folder)
+                                await self.quark_file_download(fid_list, folder=folder, folders_map=folders_map)
                                 file_fid_list.extend([i for i in file_data_list if not i2['dir']])
                                 dir_list = [i for i in file_data_list if i['dir']]
+
                                 if not dir_list:
                                     not_dir = True
                                 data_list3.extend(dir_list)
@@ -263,7 +280,7 @@ class QuarkPanFileManager:
                 if len(files_id_list) > 0 or len(file_fid_list) > 0:
                     fid_list = [i[0] for i in files_id_list]
                     file_fid_list.extend(fid_list)
-                    await self.quark_file_download(file_fid_list, folder='.')
+                    await self.quark_file_download(file_fid_list, folder='.', folders_map=folders_map)
 
             else:
                 if is_owner == 1:
@@ -302,16 +319,18 @@ class QuarkPanFileManager:
         async with httpx.AsyncClient() as client:
             timeout = httpx.Timeout(60.0, connect=60.0)
             async with client.stream("GET", download_url, headers=headers, timeout=timeout) as response:
+                if response.headers.get("content-length") is None:
+                    response.headers["content-length"] = "0"
                 total_size = int(response.headers["content-length"])
                 with open(save_path, "wb") as f:
-                    with tqdm(total=total_size, unit="B", unit_scale=True,
+                    with tqdm(unit="B", unit_scale=True,
                               desc=os.path.basename(save_path),
                               ncols=80) as pbar:
                         async for chunk in response.aiter_bytes():
                             f.write(chunk)
                             pbar.update(len(chunk))
 
-    async def quark_file_download(self, fids: List[str], folder: str = '') -> None:
+    async def quark_file_download(self, fids: List[str], folder: str = '', folders_map = {}) -> None:
         params = {
             'pr': 'ucpro',
             'fr': 'pc',
@@ -335,15 +354,28 @@ class QuarkPanFileManager:
             elif data_list:
                 custom_print('文件下载地址列表获取成功')
 
-            save_folder = f'downloads/{folder}' if folder else 'downloads'
+            save_folder = f'downloads' # if folder else 'downloads'
             os.makedirs(save_folder, exist_ok=True)
             n = 0
             for i in data_list:
                 n += 1
                 filename = i["file_name"]
                 custom_print(f'开始下载第{n}个文件-{filename}')
+
+                # build save path start
+                base_path = ""
+                if "pdir_fid" in i:
+                    pdir_fid = i["pdir_fid"]
+                    while pdir_fid in folders_map:
+                        base_path = "/" + folders_map[pdir_fid]["file_name"] + base_path
+                        pdir_fid = folders_map[pdir_fid]["pdir_fid"]
+                final_save_folder = f"{save_folder}/{base_path}"
+                os.makedirs(final_save_folder, exist_ok=True)
+                # build save path stop
+
                 download_url = i["download_url"]
-                save_path = os.path.join(save_folder, filename)
+                save_path = os.path.join(final_save_folder, filename)
+
                 await self.download_file(download_url, save_path, headers=self.headers)
 
     async def submit_task(self, task_id: str, retry: int = 50) -> Union[
