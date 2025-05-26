@@ -7,7 +7,11 @@ import httpx
 from prettytable import PrettyTable
 from tqdm import tqdm
 from quark_login import QuarkLogin, CONFIG_DIR
-from utils import *
+from utils import (
+    custom_print, get_timestamp, read_config,
+    save_config, get_datetime, generate_random_code,
+    safe_copy
+)
 import json
 import os
 import random
@@ -46,7 +50,7 @@ class QuarkPanFileManager:
         url_pattern = r'https?://[^\s<>"]+|www\.[^\s<>"]+'
         return re.findall(url_pattern, text)[0]
 
-    async def get_stoken(self, pwd_id: str) -> str:
+    async def get_stoken(self, pwd_id: str, password: str = '') -> str:
         params = {
             'pr': 'ucpro',
             'fr': 'pc',
@@ -54,8 +58,8 @@ class QuarkPanFileManager:
             '__dt': random.randint(100, 9999),
             '__t': get_timestamp(13),
         }
-        api = f"https://drive-pc.quark.cn/1/clouddrive/share/sharepage/token"
-        data = {"pwd_id": pwd_id, "passcode": ""}
+        api = "https://drive-pc.quark.cn/1/clouddrive/share/sharepage/token"
+        data = {"pwd_id": pwd_id, "passcode": password}
         async with httpx.AsyncClient() as client:
             timeout = httpx.Timeout(60.0, connect=60.0)
             response = await client.post(api, json=data, params=params, headers=self.headers, timeout=timeout)
@@ -69,7 +73,7 @@ class QuarkPanFileManager:
 
     async def get_detail(self, pwd_id: str, stoken: str, pdir_fid: str = '0') -> Tuple[
                 str, List[Dict[str, Union[int, str]]]]:
-        api = f"https://drive-pc.quark.cn/1/clouddrive/share/sharepage/detail"
+        api = "https://drive-pc.quark.cn/1/clouddrive/share/sharepage/detail"
         page = 1
         file_list: List[Dict[str, Union[int, str]]] = []
 
@@ -193,15 +197,18 @@ class QuarkPanFileManager:
                 to_dir_id = json_data["data"]["fid"]
                 custom_print(f"自动将保存目录切换至 {pdir_name} 文件夹")
             elif json_data["code"] == 23008:
-                custom_print(f'文件夹同名冲突，请更换一个文件夹名称后重试', error_msg=True)
+                custom_print('文件夹同名冲突，请更换一个文件夹名称后重试', error_msg=True)
             else:
                 custom_print(f"错误信息：{json_data['message']}", error_msg=True)
 
-    async def run(self, surl: str, folder_id: Union[str, None] = None, download: bool = False) -> None:
+    async def run(self, input_line: str, folder_id: Union[str, None] = None, download: bool = False) -> None:
         self.folder_id = folder_id
-        custom_print(f'文件分享链接：{surl}')
-        pwd_id = self.get_pwd_id(surl)
-        stoken = await self.get_stoken(pwd_id)
+        share_url = input_line.strip()
+        custom_print(f'文件分享链接：{share_url}')
+        match_password = re.search("password=(.*?)(?=$|&)", share_url)
+        password = match_password.group(1) if match_password else ""
+        pwd_id = self.get_pwd_id(input_line).split("#")[0]
+        stoken = await self.get_stoken(pwd_id, password)
         if not stoken:
             return
         is_owner, data_list = await self.get_detail(pwd_id, stoken)
@@ -241,7 +248,7 @@ class QuarkPanFileManager:
 
             if download:
                 if is_owner == 0:
-                    custom_print(f'下载文件必须是网盘内文件，请先将文件转存至网盘中')
+                    custom_print('下载文件必须是自己的网盘内文件，请先将文件转存至网盘中，然后再从自己网盘中获取分享地址进行下载')
                     return
 
                 for i in data_list:
@@ -262,8 +269,8 @@ class QuarkPanFileManager:
                                                 "file_name": data["file_name"],
                                                 "pdir_fid": data["pdir_fid"]
                                             }
-                                # record folder's fid stop
 
+                                # record folder's fid stop
                                 folder = i["file_name"]
                                 fid_list = [i["fid"] for i in file_data_list]
                                 await self.quark_file_download(fid_list, folder=folder, folders_map=folders_map)
@@ -284,7 +291,7 @@ class QuarkPanFileManager:
 
             else:
                 if is_owner == 1:
-                    custom_print(f'网盘中已经存在该文件，无需再次转存')
+                    custom_print('网盘中已经存在该文件，无需再次转存')
                     return
                 task_id = await self.get_share_save_task_id(pwd_id, stoken, fid_list, share_fid_token_list,
                                                             to_pdir_fid=self.folder_id)
@@ -321,7 +328,6 @@ class QuarkPanFileManager:
             async with client.stream("GET", download_url, headers=headers, timeout=timeout) as response:
                 if response.headers.get("content-length") is None:
                     response.headers["content-length"] = "0"
-                total_size = int(response.headers["content-length"])
                 with open(save_path, "wb") as f:
                     with tqdm(unit="B", unit_scale=True,
                               desc=os.path.basename(save_path),
@@ -330,7 +336,8 @@ class QuarkPanFileManager:
                             f.write(chunk)
                             pbar.update(len(chunk))
 
-    async def quark_file_download(self, fids: List[str], folder: str = '', folders_map = {}) -> None:
+    async def quark_file_download(self, fids: List[str], folder: str = '', folders_map=None) -> None:
+        folders_map = folders_map or {}
         params = {
             'pr': 'ucpro',
             'fr': 'pc',
@@ -354,7 +361,7 @@ class QuarkPanFileManager:
             elif data_list:
                 custom_print('文件下载地址列表获取成功')
 
-            save_folder = f'downloads' # if folder else 'downloads'
+            save_folder = 'downloads'  # if folder else 'downloads'
             os.makedirs(save_folder, exist_ok=True)
             n = 0
             for i in data_list:
@@ -664,7 +671,7 @@ class QuarkPanFileManager:
 
 
 def load_url_file(fpath: str) -> List[str]:
-    with open(fpath, 'r') as f:
+    with open(fpath, 'r', encoding='utf-8') as f:
         content = f.readlines()
 
     url_list = [line.strip() for line in content if 'http' in line]
