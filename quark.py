@@ -750,7 +750,7 @@ def print_menu() -> None:
     print("╔══════════════════════════════════════════════════════════════════════════════════════════════════════╗")
     print_ascii()
     print("║                                                                                                      ║")
-    print("║                                  Author: Hmily  Version: 0.0.3                                       ║")
+    print("║                                  Author: Hmily  Version: 0.0.4                                       ║")
     print("║                          GitHub: https://github.com/ihmily/QuarkPanTool                              ║")
     print("╠══════════════════════════════════════════════════════════════════════════════════════════════════════╣")
     print(
