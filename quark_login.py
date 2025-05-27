@@ -1,5 +1,4 @@
 import os
-import subprocess
 import time
 from typing import Dict, Union, List
 from playwright.sync_api import sync_playwright

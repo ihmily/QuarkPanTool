@@ -205,7 +205,7 @@ class QuarkPanFileManager:
         self.folder_id = folder_id
         share_url = input_line.strip()
         custom_print(f'文件分享链接：{share_url}')
-        match_password = re.search("password=(.*?)(?=$|&)", share_url)
+        match_password = re.search("pwd=(.*?)(?=$|&)", share_url)
         password = match_password.group(1) if match_password else ""
         pwd_id = self.get_pwd_id(input_line).split("#")[0]
         stoken = await self.get_stoken(pwd_id, password)
@@ -523,7 +523,7 @@ class QuarkPanFileManager:
             json_data = response.json()
             return json_data['data']['share_id']
 
-    async def submit_share(self, share_id: str) -> None:
+    async def submit_share(self, share_id: str) -> tuple:
         params = {
             'pr': 'ucpro',
             'fr': 'pc',
@@ -539,12 +539,13 @@ class QuarkPanFileManager:
                                          json=json_data, headers=self.headers, timeout=timeout)
             json_data = response.json()
             share_url = json_data['data']['share_url']
+            title = json_data['data']['title']
             if 'passcode' in json_data['data']:
                 share_url = share_url + f"?pwd={json_data['data']['passcode']}"
-            return share_url
+            return share_url, title
 
     async def share_run(self, share_url: str, folder_id: Union[str, None] = None, url_type: int = 1,
-                        expired_type: int = 2, password: str = '') -> None:
+                        expired_type: int = 2, password: str = '', traverse_depth: int = 2) -> None:
         first_dir = ''
         second_dir = ''
         try:
@@ -561,12 +562,69 @@ class QuarkPanFileManager:
             safe_copy(save_share_path, 'share/share_url_backup.txt')
             with open(save_share_path, 'w', encoding='utf-8'):
                 pass
+            
+            # 如果遍历深度为0，直接分享根目录
+            if traverse_depth == 0:
+                try:
+                    custom_print('开始分享页面中所有根目录')
+                    task_id = await self.get_share_task_id(pwd_id, "根目录", url_type=url_type,
+                                                           expired_type=expired_type,
+                                                           password=password)
+                    share_id = await self.get_share_id(task_id)
+                    share_url, title = await self.submit_share(share_id)
+                    with open(save_share_path, 'a', encoding='utf-8') as f:
+                        content = f'1 | {title} | {share_url}'
+                        f.write(content + '\n')
+                        custom_print(f'分享 {title} 成功')
+                    return
+                except Exception as e:
+                    print('分享失败：', e)
+                    return
+            
             while True:
                 json_data = await self.get_sorted_file_list(pwd_id, page=str(first_page), size='50', fetch_total='1',
                                                             sort='file_type:asc,file_name:asc')
+                print(0, json_data)
                 for i1 in json_data['data']['list']:
                     if i1['dir']:
                         first_dir = i1['file_name']
+                        print(1, first_dir)
+                        # 如果遍历深度为1，直接分享一级目录
+                        if traverse_depth == 1:
+                            n += 1
+                            share_success = False
+                            share_error_msg = ''
+                            fid = ''
+                            for i in range(3):
+                                try:
+                                    custom_print(f'{n}.开始分享 {first_dir} 文件夹')
+                                    random_time = random.choice([0.5, 1, 1.5, 2])
+                                    await asyncio.sleep(random_time)
+                                    fid = i1['fid']
+                                    task_id = await self.get_share_task_id(fid, first_dir, url_type=url_type,
+                                                                           expired_type=expired_type,
+                                                                           password=password)
+                                    share_id = await self.get_share_id(task_id)
+                                    share_url, title = await self.submit_share(share_id)
+                                    with open(save_share_path, 'a', encoding='utf-8') as f:
+                                        content = f'{n} | {first_dir} | {share_url}'
+                                        f.write(content + '\n')
+                                        custom_print(f'{n}.分享成功 {first_dir} 文件夹')
+                                        share_success = True
+                                        break
+                                except Exception as e:
+                                    share_error_msg = e
+                                    error += 1
+                            
+                            if not share_success:
+                                print('分享失败：', share_error_msg)
+                                save_config('./share/share_error.txt',
+                                            content=f'{error}.{first_dir} 文件夹\n', mode='a')
+                                save_config('./share/retry.txt',
+                                            content=f'{n} | {first_dir} | {fid}\n', mode='a')
+                            continue
+                        
+                        # 遍历深度为2，遍历二级目录
                         second_page = 1
                         while True:
                             # print(f'正在获取{first_dir}第{first_page}页，二级目录第{second_page}页，目前共分享{n}文件')
@@ -591,7 +649,7 @@ class QuarkPanFileManager:
                                                                                    expired_type=expired_type,
                                                                                    password=password)
                                             share_id = await self.get_share_id(task_id)
-                                            share_url = await self.submit_share(share_id)
+                                            share_url, title = await self.submit_share(share_id)
                                             with open(save_share_path, 'a', encoding='utf-8') as f:
                                                 content = f'{n} | {first_dir} | {second_dir} | {share_url}'
                                                 f.write(content + '\n')
@@ -651,7 +709,7 @@ class QuarkPanFileManager:
                         # print('获取到任务ID：', task_id)
                         share_id = await self.get_share_id(task_id)
                         # print('获取到分享ID：', share_id)
-                        share_url = await self.submit_share(share_id)
+                        share_url, title = await self.submit_share(share_id)
                         with open(save_share_path, 'a', encoding='utf-8') as f:
                             content = f'{n} | {first_dir} | {second_dir} | {share_url}'
                             f.write(content + '\n')
@@ -671,11 +729,12 @@ class QuarkPanFileManager:
 
 
 def load_url_file(fpath: str) -> List[str]:
-    with open(fpath, 'r', encoding='utf-8') as f:
-        content = f.readlines()
+    url_pattern = re.compile(r'https?://\S+')
 
-    url_list = [line.strip() for line in content if 'http' in line]
-    return url_list
+    with open(fpath, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    return url_pattern.findall(content)
 
 
 def print_ascii():
@@ -760,10 +819,20 @@ if __name__ == '__main__':
                 is_private = input("是否加密(1否/2是)：")
                 url_encrypt = 2 if is_private == '2' else 1
                 passcode = input('请输入你想设置的分享提取码(直接回车，可随机生成):') if url_encrypt == 2 else ''
+                
+                print("请选择遍历深度：")
+                print("0.不遍历（只分享根目录-默认）")
+                print("1.遍历只分享一级目录")
+                print("2.遍历只分享两级目录")
+                traverse_option = input("请输入选项(0/1/2)：")
+                _traverse_depth = 0  # 默认只分享根目录
+                if traverse_option in ['1', '2']:
+                    _traverse_depth = int(traverse_option)
+                
                 if share_option and share_option == '1':
                     asyncio.run(quark_file_manager.share_run(
                         url.strip(), folder_id=to_dir_id, url_type=int(url_encrypt),
-                        expired_type=int(_expired_type), password=passcode))
+                        expired_type=int(_expired_type), password=passcode, traverse_depth=_traverse_depth))
                 else:
                     asyncio.run(quark_file_manager.share_run_retry(url.strip(), url_type=url_encrypt,
                                                                    expired_type=_expired_type, password=passcode))
