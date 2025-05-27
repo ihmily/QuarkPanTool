@@ -72,7 +72,7 @@ class QuarkPanFileManager:
             return stoken
 
     async def get_detail(self, pwd_id: str, stoken: str, pdir_fid: str = '0') -> Tuple[
-                str, List[Dict[str, Union[int, str]]]]:
+        str, List[Dict[str, Union[int, str]]]]:
         api = "https://drive-pc.quark.cn/1/clouddrive/share/sharepage/detail"
         page = 1
         file_list: List[Dict[str, Union[int, str]]] = []
@@ -248,7 +248,8 @@ class QuarkPanFileManager:
 
             if download:
                 if is_owner == 0:
-                    custom_print('下载文件必须是自己的网盘内文件，请先将文件转存至网盘中，然后再从自己网盘中获取分享地址进行下载')
+                    custom_print(
+                        '下载文件必须是自己的网盘内文件，请先将文件转存至网盘中，然后再从自己网盘中获取分享地址进行下载')
                     return
 
                 for i in data_list:
@@ -386,7 +387,7 @@ class QuarkPanFileManager:
                 await self.download_file(download_url, save_path, headers=self.headers)
 
     async def submit_task(self, task_id: str, retry: int = 50) -> Union[
-                bool, Dict[str, Union[str, Dict[str, Union[int, str]]]]]:
+        bool, Dict[str, Union[str, Dict[str, Union[int, str]]]]]:
 
         for i in range(retry):
             # 随机暂停100-50毫秒
@@ -562,7 +563,7 @@ class QuarkPanFileManager:
             safe_copy(save_share_path, 'share/share_url_backup.txt')
             with open(save_share_path, 'w', encoding='utf-8'):
                 pass
-            
+
             # 如果遍历深度为0，直接分享根目录
             if traverse_depth == 0:
                 try:
@@ -580,15 +581,13 @@ class QuarkPanFileManager:
                 except Exception as e:
                     print('分享失败：', e)
                     return
-            
+
             while True:
                 json_data = await self.get_sorted_file_list(pwd_id, page=str(first_page), size='50', fetch_total='1',
                                                             sort='file_type:asc,file_name:asc')
-                print(0, json_data)
                 for i1 in json_data['data']['list']:
                     if i1['dir']:
                         first_dir = i1['file_name']
-                        print(1, first_dir)
                         # 如果遍历深度为1，直接分享一级目录
                         if traverse_depth == 1:
                             n += 1
@@ -615,7 +614,7 @@ class QuarkPanFileManager:
                                 except Exception as e:
                                     share_error_msg = e
                                     error += 1
-                            
+
                             if not share_success:
                                 print('分享失败：', share_error_msg)
                                 save_config('./share/share_error.txt',
@@ -623,7 +622,7 @@ class QuarkPanFileManager:
                                 save_config('./share/retry.txt',
                                             content=f'{n} | {first_dir} | {fid}\n', mode='a')
                             continue
-                        
+
                         # 遍历深度为2，遍历二级目录
                         second_page = 1
                         while True:
@@ -819,16 +818,16 @@ if __name__ == '__main__':
                 is_private = input("是否加密(1否/2是)：")
                 url_encrypt = 2 if is_private == '2' else 1
                 passcode = input('请输入你想设置的分享提取码(直接回车，可随机生成):') if url_encrypt == 2 else ''
-                
-                print("请选择遍历深度：")
+
+                print("\n\r请选择遍历深度：")
                 print("0.不遍历（只分享根目录-默认）")
                 print("1.遍历只分享一级目录")
-                print("2.遍历只分享两级目录")
+                print("2.遍历只分享两级目录\n")
                 traverse_option = input("请输入选项(0/1/2)：")
                 _traverse_depth = 0  # 默认只分享根目录
                 if traverse_option in ['1', '2']:
                     _traverse_depth = int(traverse_option)
-                
+
                 if share_option and share_option == '1':
                     asyncio.run(quark_file_manager.share_run(
                         url.strip(), folder_id=to_dir_id, url_type=int(url_encrypt),
