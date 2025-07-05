@@ -43,7 +43,7 @@ class QuarkPanFileManager:
 
     @staticmethod
     def get_pwd_id(share_url: str) -> str:
-        return share_url.split('?')[0].split('/s/')[1]
+        return share_url.split('?')[0].split('/s/')[-1]
 
     @staticmethod
     def extract_urls(text: str) -> list:
@@ -208,6 +208,9 @@ class QuarkPanFileManager:
         match_password = re.search("pwd=(.*?)(?=$|&)", share_url)
         password = match_password.group(1) if match_password else ""
         pwd_id = self.get_pwd_id(input_line).split("#")[0]
+        if not pwd_id:
+            custom_print(f'文件分享链接不可为空！', error_msg=True)
+            return
         stoken = await self.get_stoken(pwd_id, password)
         if not stoken:
             return
@@ -342,18 +345,31 @@ class QuarkPanFileManager:
         params = {
             'pr': 'ucpro',
             'fr': 'pc',
-            'uc_param_str': '',
-            '__dt': random.randint(600, 9999),
-            '__t': get_timestamp(13),
+            'sys': 'win32',
+            've': '2.5.56',
+            'ut': '',
+            'guid': '',
         }
 
         data = {
             'fids': fids
         }
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "quark-cloud-drive/2.5.56 Chrome/100.0.4896.160 Electron/18.3.5.12-a038f7b798 Safari/537.36 "
+                          "Channel/pckk_other_ch",
+            "Accept": "application/json, text/plain, */*",
+            "Content-Type": "application/json",
+            "accept-language": "zh-CN",
+            "origin": "https://pan.quark.cn",
+            "referer": "https://pan.quark.cn/",
+            "cookie": self.cookies
+        }
+
         download_api = 'https://drive-pc.quark.cn/1/clouddrive/file/download'
         async with httpx.AsyncClient() as client:
             timeout = httpx.Timeout(60.0, connect=60.0)
-            response = await client.post(download_api, json=data, headers=self.headers, params=params, timeout=timeout)
+            response = await client.post(download_api, json=data, headers=headers, params=params, timeout=timeout)
             json_data = response.json()
             data_list = json_data.get('data', None)
             if json_data['status'] != 200:
@@ -845,7 +861,7 @@ if __name__ == '__main__':
                 if create_name:
                     asyncio.run(quark_file_manager.create_dir(create_name.strip()))
                 else:
-                    custom_print("创建的文件夹名称不可为空！")
+                    custom_print("创建的文件夹名称不可为空！", error_msg=True)
 
             elif input_text.strip() == '5':
                 try:
