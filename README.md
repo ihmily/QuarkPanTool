@@ -14,7 +14,7 @@ QuarkPanTool 是一个简单易用的小工具，旨在帮助用户快速批量�
 - 轻松操作：简洁直观的命令行界面，方便快捷地完成文件转存。
 - 批量转存：支持一次性转存多个夸克网盘分享链接中的文件。
 - 批量分享：支持一次性将某个文件夹内的所有文件夹批量生成分享链接，无需手动分享文件。
-- 本地下载：支持批量下载网盘文件夹中的所有文件。
+- 本地下载：支持批量下载网盘文件夹中的文件，已绕过web端文件大小下载限制，无需VIP。
 
 ## 如何使用
 
@@ -39,7 +39,7 @@ playwright install firefox
 python quark.py
 ```
 
-运行后会使用playwright进行登录操作，当然也可以自己手动获取cookie填写到config/cookies.txt文件中。
+运行后会使用playwright进行登录操作，当然也可以自己手动获取cookie填写到config/cookies.txt文件中。更多说明请浏览 [wiki](https://github.com/ihmily/QuarkPanTool/wiki) 页面
 
 ## 注意事项
 
