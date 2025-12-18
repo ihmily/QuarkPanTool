@@ -1,21 +1,18 @@
-# -*- coding: utf-8 -*-
 
 import asyncio
-import re
-import sys
-import httpx
-from prettytable import PrettyTable
-from tqdm import tqdm
-from quark_login import QuarkLogin, CONFIG_DIR
-from utils import (
-    custom_print, get_timestamp, read_config,
-    save_config, get_datetime, generate_random_code,
-    safe_copy
-)
 import json
 import os
 import random
-from typing import List, Dict, Union, Tuple, Any
+import re
+import sys
+from typing import Any, Union
+
+import httpx
+from prettytable import PrettyTable
+from tqdm import tqdm
+
+from quark_login import CONFIG_DIR, QuarkLogin
+from utils import custom_print, generate_random_code, get_datetime, get_timestamp, read_config, safe_copy, save_config
 
 
 class QuarkPanFileManager:
@@ -27,7 +24,7 @@ class QuarkPanFileManager:
         self.pdir_id: Union[str, None] = '0'
         self.dir_name: Union[str, None] = '根目录'
         self.cookies: str = self.get_cookies()
-        self.headers: Dict[str, str] = {
+        self.headers: dict[str, str] = {
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko)'
                           ' Chrome/94.0.4606.71 Safari/537.36 Core/1.94.225.400 QQBrowser/12.2.5544.400',
             'origin': 'https://pan.quark.cn',
@@ -71,11 +68,10 @@ class QuarkPanFileManager:
                 custom_print(f"文件转存失败，{json_data['message']}")
             return stoken
 
-    async def get_detail(self, pwd_id: str, stoken: str, pdir_fid: str = '0') -> Tuple[
-        str, List[Dict[str, Union[int, str]]]]:
+    async def get_detail(self, pwd_id: str, stoken: str, pdir_fid: str = '0') -> str | tuple | None:
         api = "https://drive-pc.quark.cn/1/clouddrive/share/sharepage/detail"
         page = 1
-        file_list: List[Dict[str, Union[int, str]]] = []
+        file_list: list[dict[str, Union[int, str]]] = []
 
         async with httpx.AsyncClient() as client:
             while True:
@@ -109,13 +105,13 @@ class QuarkPanFileManager:
                 _list = json_data["data"]["list"]
 
                 for file in _list:
-                    d: Dict[str, Union[int, str]] = {
+                    d: dict[str, Union[int, str]] = {
                         "fid": file["fid"],
                         "file_name": file["file_name"],
                         "file_type": file["file_type"],
                         "dir": file["dir"],
                         "pdir_fid": file["pdir_fid"],
-                        "include_items": file["include_items"] if "include_items" in file else '',
+                        "include_items": file.get("include_items", ''),
                         "share_fid_token": file["share_fid_token"],
                         "status": file["status"]
                     }
@@ -126,7 +122,7 @@ class QuarkPanFileManager:
                 page += 1
 
     async def get_sorted_file_list(self, pdir_fid='0', page='1', size='100', fetch_total='false',
-                                   sort='') -> Dict[str, Any]:
+                                   sort='') -> dict[str, Any]:
         params = {
             'pr': 'ucpro',
             'fr': 'pc',
@@ -209,7 +205,7 @@ class QuarkPanFileManager:
         password = match_password.group(1) if match_password else ""
         pwd_id = self.get_pwd_id(input_line).split("#")[0]
         if not pwd_id:
-            custom_print(f'文件分享链接不可为空！', error_msg=True)
+            custom_print('文件分享链接不可为空！', error_msg=True)
             return
         stoken = await self.get_stoken(pwd_id, password)
         if not stoken:
@@ -217,8 +213,8 @@ class QuarkPanFileManager:
         is_owner, data_list = await self.get_detail(pwd_id, stoken)
         files_count = 0
         folders_count = 0
-        files_list: List[str] = []
-        folders_list: List[str] = []
+        files_list: list[str] = []
+        folders_list: list[str] = []
         folders_map = {}
         files_id_list = []
         file_fid_list = []
@@ -302,7 +298,7 @@ class QuarkPanFileManager:
                 await self.submit_task(task_id)
             print()
 
-    async def get_share_save_task_id(self, pwd_id: str, stoken: str, first_ids: List[str], share_fid_tokens: List[str],
+    async def get_share_save_task_id(self, pwd_id: str, stoken: str, first_ids: list[str], share_fid_tokens: list[str],
                                      to_pdir_fid: str = '0') -> str:
         task_url = "https://drive.quark.cn/1/clouddrive/share/sharepage/save"
         params = {
@@ -340,7 +336,7 @@ class QuarkPanFileManager:
                             f.write(chunk)
                             pbar.update(len(chunk))
 
-    async def quark_file_download(self, fids: List[str], folder: str = '', folders_map=None) -> None:
+    async def quark_file_download(self, fids: list[str], folder: str = '', folders_map=None) -> None:
         folders_map = folders_map or {}
         params = {
             'pr': 'ucpro',
@@ -356,8 +352,8 @@ class QuarkPanFileManager:
         }
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "quark-cloud-drive/2.5.56 Chrome/100.0.4896.160 Electron/18.3.5.12-a038f7b798 Safari/537.36 "
-                          "Channel/pckk_other_ch",
+                          "Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0",
+
             "Accept": "application/json, text/plain, */*",
             "Content-Type": "application/json",
             "accept-language": "zh-CN",
@@ -367,46 +363,60 @@ class QuarkPanFileManager:
         }
 
         download_api = 'https://drive-pc.quark.cn/1/clouddrive/file/download'
-        async with httpx.AsyncClient() as client:
-            timeout = httpx.Timeout(60.0, connect=60.0)
-            response = await client.post(download_api, json=data, headers=headers, params=params, timeout=timeout)
-            json_data = response.json()
-            data_list = json_data.get('data', None)
-            if json_data['status'] != 200:
-                custom_print(f"文件下载地址列表获取失败, {json_data['message']}", error_msg=True)
-                return
-            elif data_list:
-                custom_print('文件下载地址列表获取成功')
 
-            save_folder = 'downloads'  # if folder else 'downloads'
-            os.makedirs(save_folder, exist_ok=True)
-            n = 0
-            for i in data_list:
-                n += 1
-                filename = i["file_name"]
-                custom_print(f'开始下载第{n}个文件-{filename}')
+        for _ in range(2):
+            async with httpx.AsyncClient() as client:
+                timeout = httpx.Timeout(60.0, connect=60.0)
+                response = await client.post(download_api, json=data, headers=headers, params=params, timeout=timeout)
+                json_data = response.json()
 
-                # build save path start
-                base_path = ""
-                if "pdir_fid" in i:
-                    pdir_fid = i["pdir_fid"]
-                    while pdir_fid in folders_map:
-                        base_path = "/" + folders_map[pdir_fid]["file_name"] + base_path
-                        pdir_fid = folders_map[pdir_fid]["pdir_fid"]
-                final_save_folder = f"{save_folder}/{base_path}"
-                os.makedirs(final_save_folder, exist_ok=True)
-                # build save path stop
+                if json_data.get('code') == 23018:
+                    headers['User-Agent'] = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                                             "(KHTML, like Gecko) quark-cloud-drive/2.5.56 Chrome/100.0.4896.160 "
+                                             "Electron/18.3.5.12-a038f7b798 Safari/537.36 Channel/pckk_other_ch")
+                    continue
 
-                download_url = i["download_url"]
-                save_path = os.path.join(final_save_folder, filename)
+                data_list = json_data.get('data', None)
+                if json_data['status'] != 200:
+                    custom_print(f"文件下载地址列表获取失败, {json_data['message']}", error_msg=True)
+                    return
+                elif data_list:
+                    custom_print('文件下载地址列表获取成功')
 
-                await self.download_file(download_url, save_path, headers=self.headers)
+                save_folder = 'downloads'  # if folder else 'downloads'
+                os.makedirs(save_folder, exist_ok=True)
+                n = 0
+                for i in data_list:
+                    n += 1
+                    filename = i["file_name"]
+                    custom_print(f'开始下载第{n}个文件-{filename}')
 
-    async def submit_task(self, task_id: str, retry: int = 50) -> Union[
-        bool, Dict[str, Union[str, Dict[str, Union[int, str]]]]]:
+                    # build save path start
+                    base_path = ""
+                    if "pdir_fid" in i:
+                        pdir_fid = i["pdir_fid"]
+                        while pdir_fid in folders_map:
+                            base_path = "/" + folders_map[pdir_fid]["file_name"] + base_path
+                            pdir_fid = folders_map[pdir_fid]["pdir_fid"]
+                    final_save_folder = f"{save_folder}/{base_path}"
+                    os.makedirs(final_save_folder, exist_ok=True)
+                    # build save path stop
+
+                    download_url = i["download_url"]
+                    save_path = os.path.join(final_save_folder, filename)
+                    headers = {
+                        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, "
+                                      "like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0",
+                        "origin": "https://pan.quark.cn",
+                        "referer": "https://pan.quark.cn/",
+                        "cookie": self.cookies
+                    }
+                    await self.download_file(download_url, save_path, headers=headers)
+            return
+
+    async def submit_task(self, task_id: str, retry: int = 50) -> bool | dict:
 
         for i in range(retry):
-            # 随机暂停100-50毫秒
             await asyncio.sleep(random.randint(500, 1000) / 1000)
             custom_print(f'第{i + 1}次提交任务')
             submit_url = (f"https://drive-pc.quark.cn/1/clouddrive/task?pr=ucpro&fr=pc&uc_param_str=&task_id={task_id}"
@@ -721,9 +731,7 @@ class QuarkPanFileManager:
                         task_id = await self.get_share_task_id(fid, second_dir, url_type=url_type,
                                                                expired_type=expired_type,
                                                                password=password)
-                        # print('获取到任务ID：', task_id)
                         share_id = await self.get_share_id(task_id)
-                        # print('获取到分享ID：', share_id)
                         share_url, title = await self.submit_share(share_id)
                         with open(save_share_path, 'a', encoding='utf-8') as f:
                             content = f'{n} | {first_dir} | {second_dir} | {share_url}'
@@ -732,7 +740,6 @@ class QuarkPanFileManager:
                             share_success = True
                             break
                     except Exception as e:
-                        # print('分享失败：', e)
                         share_error_msg = e
                         error += 1
 
@@ -743,33 +750,33 @@ class QuarkPanFileManager:
         save_config(path='./share/retry.txt', content=error_content, mode='w')
 
 
-def load_url_file(fpath: str) -> List[str]:
+def load_url_file(fpath: str) -> list[str]:
     url_pattern = re.compile(r'https?://\S+')
 
-    with open(fpath, 'r', encoding='utf-8') as f:
+    with open(fpath, encoding='utf-8') as f:
         content = f.read()
 
     return url_pattern.findall(content)
 
 
 def print_ascii():
-    print(r"""║                                     _                                  _                     _       ║    
+    print(r"""
+║                                     _                                  _                     _       ║    
 ║       __ _   _   _    __ _   _ __  | | __    _ __     __ _   _ __     | |_    ___     ___   | |      ║
 ║      / _  | | | | |  / _  | | '__| | |/ /   | '_ \   / _  | |  _ \    | __|  / _ \   / _ \  | |      ║
 ║     | (_| | | |_| | | (_| | | |    |   <    | |_) | | (_| | | | | |   | |_  | (_) | | (_) | | |      ║
 ║      \__, |  \__,_|  \__,_| |_|    |_|\_\   | .__/   \__,_| |_| |_|    \__|  \___/   \___/  |_|      ║
-║         |_|                                 |_|                                                      ║""")
+║         |_|                                 |_|                                                      ║""".strip())
 
 
 def print_menu() -> None:
     print("╔══════════════════════════════════════════════════════════════════════════════════════════════════════╗")
     print_ascii()
     print("║                                                                                                      ║")
-    print("║                                  Author: Hmily  Version: 0.0.5                                       ║")
+    print("║                                  Author: Hmily  Version: 0.0.6                                       ║")
     print("║                          GitHub: https://github.com/ihmily/QuarkPanTool                              ║")
     print("╠══════════════════════════════════════════════════════════════════════════════════════════════════════╣")
-    print(
-        r"║     1.分享地址转存文件   2.批量生成分享链接   3.切换网盘保存目录   4.创建网盘文件夹   5.下载到本地   6.登录        ║")
+    print("║     1.分享地址转存文件   2.批量生成分享链接   3.切换网盘保存目录   4.创建网盘文件夹   5.下载到本地   6.登录        ║")
     print("╚══════════════════════════════════════════════════════════════════════════════════════════════════════╝")
 
 
@@ -830,7 +837,7 @@ if __name__ == '__main__':
                 expired_option = {"1": 2, "2": 3, "3": 4, "4": 1}
                 print("1.1天  2.7天  3.30天  4.永久")
                 select_option = input("请输入分享时长选项：")
-                _expired_type = expired_option[select_option] if select_option in expired_option else 4
+                _expired_type = expired_option.get(select_option, 4)
                 is_private = input("是否加密(1否/2是)：")
                 url_encrypt = 2 if is_private == '2' else 1
                 passcode = input('请输入你想设置的分享提取码(直接回车，可随机生成):') if url_encrypt == 2 else ''
