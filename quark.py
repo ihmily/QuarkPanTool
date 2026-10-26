@@ -5,6 +5,7 @@ import os
 import random
 import re
 import sys
+import unicodedata
 from typing import Any, Union
 
 import httpx
@@ -325,16 +326,24 @@ class QuarkPanFileManager:
     async def download_file(download_url: str, save_path: str, headers: dict) -> None:
         async with httpx.AsyncClient() as client:
             timeout = httpx.Timeout(60.0, connect=60.0)
-            async with client.stream("GET", download_url, headers=headers, timeout=timeout) as response:
-                if response.headers.get("content-length") is None:
-                    response.headers["content-length"] = "0"
-                with open(save_path, "wb") as f:
-                    with tqdm(unit="B", unit_scale=True,
-                              desc=os.path.basename(save_path),
-                              ncols=80) as pbar:
-                        async for chunk in response.aiter_bytes():
-                            f.write(chunk)
-                            pbar.update(len(chunk))
+            try:
+                async with client.stream("GET", download_url, headers=headers, timeout=timeout) as response:
+                    if response.headers.get("content-length") is None:
+                        response.headers["content-length"] = "0"
+                    with open(save_path, "wb") as f:
+                        with tqdm(unit="B", unit_scale=True,
+                                  desc=os.path.basename(save_path),
+                                  ncols=80) as pbar:
+                            async for chunk in response.aiter_bytes():
+                                f.write(chunk)
+                                pbar.update(len(chunk))
+            except (asyncio.CancelledError, KeyboardInterrupt):
+                try:
+                    if os.path.exists(save_path):
+                        os.remove(save_path)
+                except OSError:
+                    pass
+                raise
 
     async def quark_file_download(self, fids: list[str], folder: str = '', folders_map=None) -> None:
         folders_map = folders_map or {}
@@ -535,20 +544,45 @@ class QuarkPanFileManager:
             json_data = response.json()
             return json_data['data']['task_id']
 
-    async def get_share_id(self, task_id: str) -> str:
-        params = {
-            'pr': 'ucpro',
-            'fr': 'pc',
-            'uc_param_str': '',
-            'task_id': task_id,
-            'retry_index': '0',
-        }
+    async def get_share_id(self, task_id: str, retry: int = 50) -> str:
+        task_url = 'https://drive-pc.quark.cn/1/clouddrive/task'
+        last_status = 'unknown'
+
         async with httpx.AsyncClient() as client:
             timeout = httpx.Timeout(60.0, connect=60.0)
-            response = await client.get('https://drive-pc.quark.cn/1/clouddrive/task', params=params,
-                                        headers=self.headers, timeout=timeout)
-            json_data = response.json()
-            return json_data['data']['share_id']
+            for retry_index in range(retry):
+                await asyncio.sleep(random.randint(500, 1000) / 1000)
+                params = {
+                    'pr': 'ucpro',
+                    'fr': 'pc',
+                    'uc_param_str': '',
+                    'task_id': task_id,
+                    'retry_index': str(retry_index),
+                    '__dt': random.randint(100, 9999),
+                    '__t': get_timestamp(13),
+                }
+                response = await client.get(task_url, params=params, headers=self.headers, timeout=timeout)
+                response.raise_for_status()
+                json_data = response.json()
+
+                if json_data.get('message') != 'ok':
+                    raise RuntimeError(
+                        f"查询分享任务失败：{json_data.get('message', '未知错误')} "
+                        f"(code={json_data.get('code', 'unknown')})"
+                    )
+
+                task_data = json_data.get('data')
+                if not isinstance(task_data, dict):
+                    raise RuntimeError(f"分享任务响应缺少有效 data：{json_data}")
+
+                last_status = task_data.get('status', 'unknown')
+                if last_status == 2:
+                    share_id = task_data.get('share_id')
+                    if not share_id:
+                        raise RuntimeError(f"分享任务已完成，但响应中没有 share_id：{json_data}")
+                    return share_id
+
+        raise TimeoutError(f"等待分享任务 {task_id} 完成超时，最后任务状态：{last_status}")
 
     async def submit_share(self, share_id: str) -> tuple:
         params = {
@@ -759,141 +793,175 @@ def load_url_file(fpath: str) -> list[str]:
     return url_pattern.findall(content)
 
 
+def prompt_option(title: str, options: dict[str, str], default: str) -> str:
+    print(title)
+    for key, description in options.items():
+        print(f"{key}. {description}")
+
+    while True:
+        selection = input(f"请输入选项（默认 {default}）：").strip() or default
+        if selection in options:
+            return selection
+        custom_print("输入无效，请重新选择", error_msg=True)
+
+
+def display_width(text: str) -> int:
+    return sum(2 if unicodedata.east_asian_width(char) in {'F', 'W'} else 1 for char in text)
+
+
+def center_text(text: str, width: int) -> str:
+    padding = max(0, width - display_width(text))
+    left_padding = padding // 2
+    return f"{' ' * left_padding}{text}{' ' * (padding - left_padding)}"
+
+
 def print_ascii():
-    print(r"""
+    art = r"""
 ║                                     _                                  _                     _       ║    
 ║       __ _   _   _    __ _   _ __  | | __    _ __     __ _   _ __     | |_    ___     ___   | |      ║
 ║      / _  | | | | |  / _  | | '__| | |/ /   | '_ \   / _  | |  _ \    | __|  / _ \   / _ \  | |      ║
 ║     | (_| | | |_| | | (_| | | |    |   <    | |_) | | (_| | | | | |   | |_  | (_) | | (_) | | |      ║
 ║      \__, |  \__,_|  \__,_| |_|    |_|\_\   | .__/   \__,_| |_| |_|    \__|  \___/   \___/  |_|      ║
-║         |_|                                 |_|                                                      ║""".strip())
+║         |_|                                 |_|                                                      ║"""
+    for line in art.strip().splitlines():
+        print(center_text(line.strip(), 104))
 
 
 def print_menu() -> None:
-    print("╔══════════════════════════════════════════════════════════════════════════════════════════════════════╗")
+    width = 104
+    inner_width = width - 2
+    print("╔" + "═" * inner_width + "╗")
     print_ascii()
-    print("║                                                                                                      ║")
-    print("║                                  Author: Hmily  Version: 0.0.6                                       ║")
-    print("║                          GitHub: https://github.com/ihmily/QuarkPanTool                              ║")
-    print("╠══════════════════════════════════════════════════════════════════════════════════════════════════════╣")
-    print("║     1.分享地址转存文件   2.批量生成分享链接   3.切换网盘保存目录   4.创建网盘文件夹   5.下载到本地   6.登录        ║")
-    print("╚══════════════════════════════════════════════════════════════════════════════════════════════════════╝")
+    print("║" + " " * inner_width + "║")
+    print("║" + center_text("Author: Hmily  Version: 0.0.6", inner_width) + "║")
+    print("║" + center_text("GitHub: https://github.com/ihmily/QuarkPanTool", inner_width) + "║")
+    print("╠" + "═" * inner_width + "╣")
+    print("║" + center_text("1. 分享地址转存文件   2. 批量生成分享链接   3. 切换网盘保存目录", inner_width) + "║")
+    print("║" + center_text("4. 创建网盘文件夹   5. 下载到本地   6. 登录   q. 退出", inner_width) + "║")
+    print("╚" + "═" * inner_width + "╝")
 
 
 if __name__ == '__main__':
     quark_file_manager = QuarkPanFileManager(headless=False, slow_mo=500)
-    while True:
-        print_menu()
+    try:
+        while True:
+            print_menu()
 
-        to_dir_id, to_dir_name = asyncio.run(quark_file_manager.load_folder_id())
+            to_dir_id, to_dir_name = asyncio.run(quark_file_manager.load_folder_id())
 
-        input_text = input("请输入你的选择(1—6或q退出)：")
+            input_text = input("请输入你的选择(1—6或q退出)：")
 
-        if input_text and input_text.strip() in ['q', 'Q']:
-            print("已退出程序！")
-            sys.exit(0)
+            if input_text and input_text.strip() in ['q', 'Q']:
+                print("已退出程序！")
+                sys.exit(0)
 
-        if input_text and input_text.strip() in [str(i) for i in range(1, 7)]:
-            if input_text.strip() == '1':
-                save_option = input("是否批量转存(1是 2否)：")
-                if save_option and save_option == '1':
-                    try:
-                        urls = load_url_file('./url.txt')
-                        if not urls:
-                            custom_print('\n分享地址为空！请先在url.txt文件中输入分享地址(一行一个)')
+            if input_text and input_text.strip() in [str(i) for i in range(1, 7)]:
+                if input_text.strip() == '1':
+                    save_option = input("是否批量转存(1是 2否)：").strip()
+                    if save_option == '1':
+                        try:
+                            urls = load_url_file('./url.txt')
+                            if not urls:
+                                custom_print('\n分享地址为空！请先在url.txt文件中输入分享地址(一行一个)')
+                                continue
+
+                            custom_print(f"\n检测到url.txt文件中有{len(urls)}条分享链接")
+                            ok = input("请你确认是否开始批量保存(确认请按2):")
+                            if ok and ok.strip() == '2':
+                                for index, url in enumerate(urls):
+                                    print(f"正在转存第{index + 1}个")
+                                    asyncio.run(quark_file_manager.run(url.strip(), to_dir_id))
+                        except FileNotFoundError:
+                            with open('url.txt', 'w', encoding='utf-8'):
+                                sys.exit(-1)
+                    else:
+                        url = input("请输入夸克文件分享地址：")
+                        if url and len(url.strip()) > 20:
+                            asyncio.run(quark_file_manager.run(url.strip(), to_dir_id))
+
+                elif input_text.strip() == '2':
+                    share_option = input("请输入你的选择(1分享 2重试分享)：")
+                    if share_option and share_option == '1':
+                        url = input("请输入需要分享的文件夹网页端页面地址：")
+                        if not url or len(url.strip()) < 20:
+                            continue
+                    else:
+                        try:
+                            url = read_config(path='./share/retry.txt', mode='r')
+                            if not url:
+                                print('\nretry.txt 为空！请检查文件')
+                                continue
+                        except FileNotFoundError:
+                            save_config('./share/retry.txt', content='')
+                            print('\nshare/retry.txt 文件为空！')
                             continue
 
-                        custom_print(f"\r检测到url.txt文件中有{len(urls)}条分享链接")
-                        ok = input("请你确认是否开始批量保存(确认请按2):")
-                        if ok and ok.strip() == '2':
-                            for index, url in enumerate(urls):
-                                print(f"正在转存第{index + 1}个")
-                                asyncio.run(quark_file_manager.run(url.strip(), to_dir_id))
+                    expired_option = {"1": 2, "2": 3, "3": 4, "4": 1}
+                    select_option = prompt_option(
+                        "选择分享时长：",
+                        {"1": "1天", "2": "7天", "3": "30天", "4": "永久"},
+                        default="4",
+                    )
+                    _expired_type = expired_option[select_option]
+                    url_encrypt = int(prompt_option(
+                        "是否加密：",
+                        {"1": "否", "2": "是"},
+                        default="1",
+                    ))
+                    passcode = input("请输入你想设置的分享提取码（直接回车可随机生成）：").strip() if url_encrypt == 2 else ''
+
+                    _traverse_depth = int(prompt_option(
+                        "选择遍历深度：",
+                        {"0": "不遍历（只分享根目录）", "1": "遍历并分享一级目录", "2": "遍历并分享两级目录"},
+                        default="0",
+                    ))
+
+                    if share_option and share_option == '1':
+                        asyncio.run(quark_file_manager.share_run(
+                            url.strip(), folder_id=to_dir_id, url_type=int(url_encrypt),
+                            expired_type=int(_expired_type), password=passcode, traverse_depth=_traverse_depth))
+                    else:
+                        asyncio.run(quark_file_manager.share_run_retry(url.strip(), url_type=url_encrypt,
+                                                                       expired_type=_expired_type, password=passcode))
+
+                elif input_text.strip() == '3':
+                    to_dir_id, to_dir_name = asyncio.run(quark_file_manager.load_folder_id(renew=True))
+                    custom_print(f"已切换保存目录至网盘 {to_dir_name} 文件夹\n")
+
+                elif input_text.strip() == '4':
+                    create_name = input("请输入需要创建的文件夹名称：")
+                    if create_name:
+                        asyncio.run(quark_file_manager.create_dir(create_name.strip()))
+                    else:
+                        custom_print("创建的文件夹名称不可为空！", error_msg=True)
+
+                elif input_text.strip() == '5':
+                    try:
+                        is_batch = input("输入你的选择(1单个地址下载，2批量下载):")
+                        if is_batch:
+                            if is_batch.strip() == '1':
+                                url = input("请输入夸克文件分享地址：")
+                                asyncio.run(quark_file_manager.run(url.strip(), to_dir_id, download=True))
+                            elif is_batch.strip() == '2':
+                                urls = load_url_file('./url.txt')
+                                if not urls:
+                                    print('\n分享地址为空！请先在url.txt文件中输入分享地址(一行一个)')
+                                    continue
+
+                                for index, url in enumerate(urls):
+                                    asyncio.run(quark_file_manager.run(url.strip(), to_dir_id, download=True))
+
                     except FileNotFoundError:
                         with open('url.txt', 'w', encoding='utf-8'):
                             sys.exit(-1)
-                else:
-                    url = input("请输入夸克文件分享地址：")
-                    if url and len(url.strip()) > 20:
-                        asyncio.run(quark_file_manager.run(url.strip(), to_dir_id))
 
-            elif input_text.strip() == '2':
-                share_option = input("请输入你的选择(1分享 2重试分享)：")
-                if share_option and share_option == '1':
-                    url = input("请输入需要分享的文件夹网页端页面地址：")
-                    if not url or len(url.strip()) < 20:
-                        continue
-                else:
-                    try:
-                        url = read_config(path='./share/retry.txt', mode='r')
-                        if not url:
-                            print('\nretry.txt 为空！请检查文件')
-                            continue
-                    except FileNotFoundError:
-                        save_config('./share/retry.txt', content='')
-                        print('\nshare/retry.txt 文件为空！')
-                        continue
+                elif input_text.strip() == '6':
+                    save_config(f'{CONFIG_DIR}/cookies.txt', '')
+                    quark_file_manager = QuarkPanFileManager(headless=False, slow_mo=500)
+                    quark_file_manager.get_cookies()
 
-                expired_option = {"1": 2, "2": 3, "3": 4, "4": 1}
-                print("1.1天  2.7天  3.30天  4.永久")
-                select_option = input("请输入分享时长选项：")
-                _expired_type = expired_option.get(select_option, 4)
-                is_private = input("是否加密(1否/2是)：")
-                url_encrypt = 2 if is_private == '2' else 1
-                passcode = input('请输入你想设置的分享提取码(直接回车，可随机生成):') if url_encrypt == 2 else ''
-
-                print("\n\r请选择遍历深度：")
-                print("0.不遍历（只分享根目录-默认）")
-                print("1.遍历只分享一级目录")
-                print("2.遍历只分享两级目录\n")
-                traverse_option = input("请输入选项(0/1/2)：")
-                _traverse_depth = 0  # 默认只分享根目录
-                if traverse_option in ['1', '2']:
-                    _traverse_depth = int(traverse_option)
-
-                if share_option and share_option == '1':
-                    asyncio.run(quark_file_manager.share_run(
-                        url.strip(), folder_id=to_dir_id, url_type=int(url_encrypt),
-                        expired_type=int(_expired_type), password=passcode, traverse_depth=_traverse_depth))
-                else:
-                    asyncio.run(quark_file_manager.share_run_retry(url.strip(), url_type=url_encrypt,
-                                                                   expired_type=_expired_type, password=passcode))
-
-            elif input_text.strip() == '3':
-                to_dir_id, to_dir_name = asyncio.run(quark_file_manager.load_folder_id(renew=True))
-                custom_print(f"已切换保存目录至网盘 {to_dir_name} 文件夹\n")
-
-            elif input_text.strip() == '4':
-                create_name = input("请输入需要创建的文件夹名称：")
-                if create_name:
-                    asyncio.run(quark_file_manager.create_dir(create_name.strip()))
-                else:
-                    custom_print("创建的文件夹名称不可为空！", error_msg=True)
-
-            elif input_text.strip() == '5':
-                try:
-                    is_batch = input("输入你的选择(1单个地址下载，2批量下载):")
-                    if is_batch:
-                        if is_batch.strip() == '1':
-                            url = input("请输入夸克文件分享地址：")
-                            asyncio.run(quark_file_manager.run(url.strip(), to_dir_id, download=True))
-                        elif is_batch.strip() == '2':
-                            urls = load_url_file('./url.txt')
-                            if not urls:
-                                print('\n分享地址为空！请先在url.txt文件中输入分享地址(一行一个)')
-                                continue
-
-                            for index, url in enumerate(urls):
-                                asyncio.run(quark_file_manager.run(url.strip(), to_dir_id, download=True))
-
-                except FileNotFoundError:
-                    with open('url.txt', 'w', encoding='utf-8'):
-                        sys.exit(-1)
-
-            elif input_text.strip() == '6':
-                save_config(f'{CONFIG_DIR}/cookies.txt', '')
-                quark_file_manager = QuarkPanFileManager(headless=False, slow_mo=500)
-                quark_file_manager.get_cookies()
-
-        else:
-            custom_print("输入无效，请重新输入")
+            else:
+                custom_print("输入无效，请重新输入")
+    except KeyboardInterrupt:
+        print("\n已退出程序！")
+        sys.exit(0)

@@ -30,7 +30,7 @@ git clone https://github.com/ihmily/QuarkPanTool.git
 
 ```
 pip install -r requirements.txt
-playwright install firefox
+python -m playwright install firefox
 ```
 
 3.运行
@@ -40,6 +40,18 @@ python quark.py
 ```
 
 运行后会使用playwright进行登录操作，当然也可以自己手动获取cookie填写到config/cookies.txt文件中。更多说明请浏览 [wiki](https://github.com/ihmily/QuarkPanTool/wiki) 页面
+
+> `python` 请使用安装项目依赖时相同的 Python 环境。若使用 Conda 环境，请先激活该环境，再执行上述命令。
+
+### Playwright 浏览器未弹出
+
+如果启动时没有弹出登录浏览器，通常是 Playwright 对应的 Firefox 浏览器尚未安装，或安装到了其他 Python 环境。请在运行程序所使用的同一环境中执行：
+
+```
+python -m playwright install firefox
+```
+
+然后重新运行 `python quark.py`。在 VS Code 中，请确认所选 Python 解释器与安装依赖、安装 Firefox 时使用的环境一致。
 
 ## 注意事项
 
